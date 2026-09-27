@@ -155,9 +155,50 @@ class HabitRepository {
     }
   }
 
+  /// Toggles today's (or any [date]'s) state with one tap, matching what the
+  /// big check-circle in the UI needs:
+  /// - Build habit: not done -> done (value = targetPerDay); done -> undone
+  ///   (row removed, so the day goes back to "not completed").
+  /// - Quit habit: clean -> slipped; slipped -> clean again (row removed,
+  ///   since "no row" already means clean by default).
+  Future<void> toggleToday({required Habit habit, required DateTime date}) async {
+    final dateKey = DateOnly.format(date);
+    final existing = await (_db.select(_db.completions)
+          ..where((c) => c.habitId.equals(habit.id) & c.date.equals(dateKey)))
+        .getSingleOrNull();
+
+    if (habit.type.isBuild) {
+      final isDone = existing != null && existing.value >= habit.targetPerDay;
+      if (isDone) {
+        await (_db.delete(_db.completions)..where((c) => c.id.equals(existing.id))).go();
+      } else {
+        await setCompletion(habitId: habit.id, date: date, value: habit.targetPerDay);
+      }
+    } else {
+      final isSlipped = existing?.isSlip ?? false;
+      if (isSlipped) {
+        await (_db.delete(_db.completions)
+              ..where((c) => c.id.equals(existing!.id)))
+            .go();
+      } else {
+        await setCompletion(habitId: habit.id, date: date, isSlip: true, value: 0);
+      }
+    }
+  }
+
   Stream<List<CompletionRow>> watchCompletions(String habitId) {
     return (_db.select(_db.completions)
           ..where((c) => c.habitId.equals(habitId)))
         .watch();
+  }
+
+  /// All completion rows for one calendar day, keyed by habit id — used to
+  /// render today's checked/unchecked (or clean/slipped) state for every
+  /// habit at once without a separate stream per habit.
+  Stream<Map<String, CompletionRow>> watchCompletionsForDate(DateTime date) {
+    final dateKey = DateOnly.format(date);
+    final query = _db.select(_db.completions)
+      ..where((c) => c.date.equals(dateKey));
+    return query.watch().map((rows) => {for (final r in rows) r.habitId: r});
   }
 }
