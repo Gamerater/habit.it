@@ -18,14 +18,9 @@ class TodayScreen extends ConsumerWidget {
     final todayCompletions = ref.watch(todayCompletionsProvider);
     final repo = ref.read(habitRepositoryProvider);
     final today = DateOnly.today();
-    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _formatFullDate(today),
-        ),
-      ),
+      appBar: AppBar(title: Text(_formatFullDate(today))),
       body: habitsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Something went wrong: $err')),
@@ -35,9 +30,9 @@ class TodayScreen extends ConsumerWidget {
           final completions = todayCompletions.valueOrNull ?? const {};
 
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
             itemCount: habits.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final habit = habits[index];
               final entry = completions[habit.id];
@@ -45,7 +40,7 @@ class TodayScreen extends ConsumerWidget {
                   ? (entry != null && entry.value >= habit.targetPerDay)
                   : !(entry?.isSlip ?? false);
 
-              return _HabitTodayCard(
+              return _HabitTodayRow(
                 habit: habit,
                 isDone: isDone,
                 onToggle: () => repo.toggleToday(habit: habit, date: today),
@@ -56,8 +51,7 @@ class TodayScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/habits/new'),
-        backgroundColor: theme.colorScheme.primary,
-        child: Icon(Icons.add, color: theme.colorScheme.onPrimary),
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -74,12 +68,15 @@ class TodayScreen extends ConsumerWidget {
   }
 }
 
-class _HabitTodayCard extends ConsumerWidget {
+/// A hairline-divided row with a colored accent stripe on the left,
+/// deliberately not a rounded "card" — avoids the identical-cards-stacked
+/// look and reads more like a considered list than a widget catalog.
+class _HabitTodayRow extends ConsumerWidget {
   final Habit habit;
   final bool isDone;
   final VoidCallback onToggle;
 
-  const _HabitTodayCard({
+  const _HabitTodayRow({
     required this.habit,
     required this.isDone,
     required this.onToggle,
@@ -106,59 +103,79 @@ class _HabitTodayCard extends ConsumerWidget {
       ),
       orElse: () => 0,
     );
-    final streakLabel = streak > 0 ? '$streak day streak' : null;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(18),
-      ),
+    return IntrinsicHeight(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 48),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  habit.name,
-                  style: theme.textTheme.titleMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (streakLabel != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    streakLabel,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
+          Container(
+            width: 3,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onToggle,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDone ? accent : Colors.transparent,
-                border: Border.all(
-                  color: isDone ? accent : theme.colorScheme.outlineVariant,
-                  width: 2,
-                ),
+          const SizedBox(width: 14),
+          HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    habit.name,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (streak > 0) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.local_fire_department,
+                          size: 14,
+                          color: theme.colorScheme.secondary,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '$streak day${streak == 1 ? '' : 's'}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
-              alignment: Alignment.center,
-              child: isDone
-                  ? const Icon(Icons.check, size: 18, color: Colors.white)
-                  : null,
+            ),
+          ),
+          Center(
+            child: GestureDetector(
+              onTap: onToggle,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDone ? accent : Colors.transparent,
+                  border: Border.all(
+                    color: isDone ? accent : theme.colorScheme.outlineVariant,
+                    width: 2,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: isDone
+                    ? const Icon(Icons.check, size: 16, color: Colors.white)
+                    : null,
+              ),
             ),
           ),
         ],
@@ -181,14 +198,11 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(
               Icons.self_improvement,
-              size: 48,
-              color: theme.colorScheme.onSurfaceVariant,
+              size: 44,
+              color: theme.colorScheme.secondary,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'No habits yet',
-              style: theme.textTheme.titleMedium,
-            ),
+            const SizedBox(height: 18),
+            Text('No habits yet', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 6),
             Text(
               'Tap + to build or quit your first one.',

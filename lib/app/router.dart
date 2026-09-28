@@ -6,6 +6,7 @@ import '../features/habits/presentation/screens/habit_list_screen.dart';
 import '../features/habits/presentation/screens/add_edit_habit_screen.dart';
 import '../features/insights/presentation/screens/insights_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
+import 'widgets/app_bottom_nav.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -55,14 +56,30 @@ class _AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => context.go(_tabs[index]),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.check_circle_outline), label: 'Today'),
-          NavigationDestination(icon: Icon(Icons.grid_view_outlined), label: 'Habits'),
-          NavigationDestination(icon: Icon(Icons.insights_outlined), label: 'Insights'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
+      bottomNavigationBar: AppBottomNav(
+        currentIndex: _currentIndex,
+        onTap: (index) => context.go(_tabs[index]),
+        items: const [
+          AppNavItem(
+            icon: Icons.check_circle_outline,
+            activeIcon: Icons.check_circle,
+            label: 'Today',
+          ),
+          AppNavItem(
+            icon: Icons.grid_view_outlined,
+            activeIcon: Icons.grid_view_rounded,
+            label: 'Habits',
+          ),
+          AppNavItem(
+            icon: Icons.insights_outlined,
+            activeIcon: Icons.insights,
+            label: 'Insights',
+          ),
+          AppNavItem(
+            icon: Icons.settings_outlined,
+            activeIcon: Icons.settings,
+            label: 'Settings',
+          ),
         ],
       ),
     );
