@@ -2,18 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/utils/date_utils.dart';
+import '../../../../core/utils/streak_calculator.dart';
+import '../../domain/habit.dart';
 import '../providers/habits_provider.dart';
 import '../widgets/color_palette.dart';
 import '../widgets/habit_avatar.dart';
+import '../widgets/habit_heatmap.dart';
 
-/// Visually consistent with Today (same avatar + hairline-row language).
-/// The grid/streak-heatmap layout from PROJECT_PLAN.md section 5 is the
-/// next planned pass for this screen.
-class HabitListScreen extends ConsumerWidget {
+enum _ViewMode { list, grid }
+
+class HabitListScreen extends ConsumerStatefulWidget {
   const HabitListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HabitListScreen> createState() => _HabitListScreenState();
+}
+
+class _HabitListScreenState extends ConsumerState<HabitListScreen> {
+  _ViewMode _mode = _ViewMode.grid;
+
+  @override
+  Widget build(BuildContext context) {
     final habitsAsync = ref.watch(activeHabitsProvider);
     final theme = Theme.of(context);
 
@@ -21,6 +31,15 @@ class HabitListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Habits'),
         actions: [
+          IconButton(
+            icon: Icon(_mode == _ViewMode.grid
+                ? Icons.view_list_outlined
+                : Icons.grid_view_rounded),
+            tooltip: _mode == _ViewMode.grid ? 'List view' : 'Grid view',
+            onPressed: () => setState(() {
+              _mode = _mode == _ViewMode.grid ? _ViewMode.list : _ViewMode.grid;
+            }),
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => context.push('/habits/new'),
@@ -52,48 +71,164 @@ class HabitListScreen extends ConsumerWidget {
             );
           }
 
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-            itemCount: habits.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final habit = habits[i];
-              final accent = hexToColor(habit.color);
-
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      width: 3,
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: accent,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: Text(habit.name, style: theme.textTheme.titleMedium),
-                      ),
-                    ),
-                    Center(
-                      child: Icon(
-                        Icons.chevron_right,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
+          return _mode == _ViewMode.grid
+              ? _GridView(habits: habits)
+              : _ListView(habits: habits);
         },
       ),
+    );
+  }
+}
+
+class _ListView extends StatelessWidget {
+  final List<Habit> habits;
+
+  const _ListView({required this.habits});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      itemCount: habits.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, i) {
+        final habit = habits[i];
+        final accent = hexToColor(habit.color);
+
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 3,
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 14),
+              HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Text(habit.name, style: theme.textTheme.titleMedium),
+                ),
+              ),
+              Center(
+                child: Icon(
+                  Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GridView extends StatelessWidget {
+  final List<Habit> habits;
+
+  const _GridView({required this.habits});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
+        childAspectRatio: 0.95,
+      ),
+      itemCount: habits.length,
+      itemBuilder: (context, i) => _HabitHeatmapCard(habit: habits[i]),
+    );
+  }
+}
+
+class _HabitHeatmapCard extends ConsumerWidget {
+  final Habit habit;
+
+  const _HabitHeatmapCard({required this.habit});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final completionsAsync = ref.watch(habitCompletionsProvider(habit.id));
+
+    return completionsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (rows) {
+        final byDate = {
+          for (final r in rows) r.date: (value: r.value, isSlip: r.isSlip),
+        };
+
+        final streak = StreakCalculator.currentStreak(
+          type: habit.type,
+          targetPerDay: habit.targetPerDay,
+          entries: [
+            for (final r in rows)
+              CompletionEntry(
+                date: DateOnly.parse(r.date),
+                value: r.value,
+                isSlip: r.isSlip,
+              ),
+          ],
+        );
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 30),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      habit.name,
+                      style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              if (streak > 0) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '$streak day${streak == 1 ? '' : 's'}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Expanded(
+                child: HabitHeatmap(
+                  type: habit.type,
+                  targetPerDay: habit.targetPerDay,
+                  colorHex: habit.color,
+                  completionsByDate: byDate,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
