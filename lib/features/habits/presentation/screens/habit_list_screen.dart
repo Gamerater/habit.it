@@ -97,34 +97,37 @@ class _ListView extends StatelessWidget {
         final habit = habits[i];
         final accent = hexToColor(habit.color);
 
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 3,
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(2),
+        return InkWell(
+          onTap: () => context.push('/habits/detail', extra: habit),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 3,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Text(habit.name, style: theme.textTheme.titleMedium),
+                const SizedBox(width: 14),
+                HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(habit.name, style: theme.textTheme.titleMedium),
+                  ),
                 ),
-              ),
-              Center(
-                child: Icon(
-                  Icons.chevron_right,
-                  color: theme.colorScheme.onSurfaceVariant,
+                Center(
+                  child: Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -184,48 +187,52 @@ class _HabitHeatmapCard extends ConsumerWidget {
           ],
         );
 
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 30),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      habit.name,
-                      style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        return InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => context.push('/habits/detail', extra: habit),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 30),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        habit.name,
+                        style: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                if (streak > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '$streak day${streak == 1 ? '' : 's'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
-              ),
-              if (streak > 0) ...[
-                const SizedBox(height: 2),
-                Text(
-                  '$streak day${streak == 1 ? '' : 's'}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(height: 10),
+                Expanded(
+                  child: HabitHeatmap(
+                    type: habit.type,
+                    targetPerDay: habit.targetPerDay,
+                    colorHex: habit.color,
+                    completionsByDate: byDate,
                   ),
                 ),
               ],
-              const SizedBox(height: 10),
-              Expanded(
-                child: HabitHeatmap(
-                  type: habit.type,
-                  targetPerDay: habit.targetPerDay,
-                  colorHex: habit.color,
-                  completionsByDate: byDate,
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },

@@ -4,15 +4,16 @@ import '../../../../core/utils/date_utils.dart';
 import '../../domain/habit_type.dart';
 import 'color_palette.dart';
 
-/// GitHub-contributions-style grid: one square per day, most recent 42 days
-/// (6 weeks), oldest to newest, wrapped 7-per-row. Filled = "counts as a
-/// good day" (done for build habits, clean for quit habits); outline = not.
+/// GitHub-contributions-style grid: one square per day, oldest to newest,
+/// wrapped at [columns] per row. Filled = "counts as a good day" (done for
+/// build habits, clean for quit habits); faint tint = not.
 class HabitHeatmap extends StatelessWidget {
   final HabitType type;
   final int targetPerDay;
   final String colorHex;
   final Map<String, ({int value, bool isSlip})> completionsByDate;
   final int days;
+  final int columns;
 
   const HabitHeatmap({
     super.key,
@@ -21,12 +22,12 @@ class HabitHeatmap extends StatelessWidget {
     required this.colorHex,
     required this.completionsByDate,
     this.days = 35,
+    this.columns = 7,
   });
 
   @override
   Widget build(BuildContext context) {
     final accent = hexToColor(colorHex);
-    final outline = Theme.of(context).colorScheme.outlineVariant;
     final today = DateOnly.today();
 
     final dates = List.generate(
@@ -36,14 +37,14 @@ class HabitHeatmap extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const columns = 7;
         const spacing = 4.0;
         final rows = (days / columns).ceil();
 
         final widthBasedSize =
             (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        final heightBasedSize =
-            (constraints.maxHeight - spacing * (rows - 1)) / rows;
+        final heightBasedSize = constraints.maxHeight.isFinite
+            ? (constraints.maxHeight - spacing * (rows - 1)) / rows
+            : widthBasedSize;
         final cellSize = widthBasedSize < heightBasedSize
             ? widthBasedSize
             : heightBasedSize;
@@ -59,7 +60,6 @@ class HabitHeatmap extends StatelessWidget {
                   size: cellSize,
                   filled: _isGoodDay(date),
                   accent: accent,
-                  outline: outline,
                 ),
             ],
           ),
@@ -81,13 +81,11 @@ class _Cell extends StatelessWidget {
   final double size;
   final bool filled;
   final Color accent;
-  final Color outline;
 
   const _Cell({
     required this.size,
     required this.filled,
     required this.accent,
-    required this.outline,
   });
 
   @override
@@ -96,9 +94,8 @@ class _Cell extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: filled ? accent : Colors.transparent,
-        borderRadius: BorderRadius.circular(3),
-        border: filled ? null : Border.all(color: outline, width: 1),
+        color: filled ? accent : accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(size * 0.3),
       ),
     );
   }

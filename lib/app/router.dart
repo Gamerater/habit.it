@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../features/tracking/presentation/screens/today_screen.dart';
 import '../features/habits/presentation/screens/habit_list_screen.dart';
 import '../features/habits/presentation/screens/add_edit_habit_screen.dart';
+import '../features/habits/presentation/screens/habit_detail_screen.dart';
+import '../features/habits/domain/habit.dart';
 import '../features/insights/presentation/screens/insights_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import 'widgets/app_bottom_nav.dart';
@@ -33,6 +35,11 @@ final GoRouter appRouter = GoRouter(
       path: '/habits/new',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const AddEditHabitScreen(),
+    ),
+    GoRoute(
+      path: '/habits/detail',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => HabitDetailScreen(habit: state.extra as Habit),
     ),
   ],
 );
