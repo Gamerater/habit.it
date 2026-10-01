@@ -56,7 +56,6 @@ class _YearHeatmapState extends State<YearHeatmap> {
   @override
   Widget build(BuildContext context) {
     final accent = hexToColor(widget.colorHex);
-    final outline = Theme.of(context).colorScheme.outlineVariant;
     final theme = Theme.of(context);
     final today = DateOnly.today();
 
@@ -107,67 +106,96 @@ class _YearHeatmapState extends State<YearHeatmap> {
       return null;
     }
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      scrollDirection: Axis.horizontal,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 16,
-              width: columnCount * _columnWidth,
-              child: Stack(
-                children: [
-                  for (int c = 0; c < columnCount; c++)
-                    if (monthLabelFor(c) != null)
-                      Positioned(
-                        left: c * _columnWidth,
-                        child: Text(
-                          monthLabelFor(c)!,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Fixed weekday labels (Tue/Thu/Sat, GitHub-style sparse labeling),
+        // not part of the horizontal scroll so they stay pinned on the left.
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 20), // matches month-label row height
+              for (int r = 0; r < 7; r++)
+                SizedBox(
+                  height: _columnWidth,
+                  child: (r == 1 || r == 3 || r == 5)
+                      ? Text(
+                          const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][r],
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                      ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final column in columns)
-                  Padding(
-                    padding: const EdgeInsets.only(right: _spacing),
-                    child: Column(
+                        )
+                      : null,
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 16,
+                    width: columnCount * _columnWidth,
+                    child: Stack(
                       children: [
-                        for (final date in column)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: _spacing),
-                            child: Container(
-                              width: _cell,
-                              height: _cell,
-                              decoration: BoxDecoration(
-                                color: date == null
-                                    ? Colors.transparent
-                                    : (isGoodDay(date) ? accent : Colors.transparent),
-                                borderRadius: BorderRadius.circular(3),
-                                border: date != null && !isGoodDay(date)
-                                    ? Border.all(color: outline, width: 1)
-                                    : null,
+                        for (int c = 0; c < columnCount; c++)
+                          if (monthLabelFor(c) != null)
+                            Positioned(
+                              left: c * _columnWidth,
+                              child: Text(
+                                monthLabelFor(c)!,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
                       ],
                     ),
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final column in columns)
+                        Padding(
+                          padding: const EdgeInsets.only(right: _spacing),
+                          child: Column(
+                            children: [
+                              for (final date in column)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: _spacing),
+                                  child: Container(
+                                    width: _cell,
+                                    height: _cell,
+                                    decoration: BoxDecoration(
+                                      color: date == null
+                                          ? Colors.transparent
+                                          : (isGoodDay(date)
+                                              ? accent
+                                              : accent.withValues(alpha: 0.1)),
+                                      borderRadius: BorderRadius.circular(_cell * 0.3),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

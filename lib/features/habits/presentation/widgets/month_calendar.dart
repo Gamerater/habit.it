@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/utils/date_utils.dart';
 import '../../domain/habit_type.dart';
-import '../widgets/color_palette.dart';
+import 'color_palette.dart';
 
 const List<String> _monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',

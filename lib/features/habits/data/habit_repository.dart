@@ -177,9 +177,7 @@ class HabitRepository {
     } else {
       final isSlipped = existing?.isSlip ?? false;
       if (isSlipped) {
-        await (_db.delete(_db.completions)
-              ..where((c) => c.id.equals(existing!.id)))
-            .go();
+        await (_db.delete(_db.completions)..where((c) => c.id.equals(existing.id))).go();
       } else {
         await setCompletion(habitId: habit.id, date: date, isSlip: true, value: 0);
       }
@@ -200,5 +198,48 @@ class HabitRepository {
     final query = _db.select(_db.completions)
       ..where((c) => c.date.equals(dateKey));
     return query.watch().map((rows) => {for (final r in rows) r.habitId: r});
+  }
+
+  /// Live notes for a habit, keyed by date string — "press and hold a day to
+  /// add a note" in the detail screen's calendar.
+  Stream<Map<String, NoteRow>> watchNotes(String habitId) {
+    final query = _db.select(_db.notes)..where((n) => n.habitId.equals(habitId));
+    return query.watch().map((rows) => {for (final r in rows) r.date: r});
+  }
+
+  Future<void> setNote({
+    required String habitId,
+    required DateTime date,
+    required String content,
+  }) async {
+    final dateKey = DateOnly.format(date);
+    final existing = await (_db.select(_db.notes)
+          ..where((n) => n.habitId.equals(habitId) & n.date.equals(dateKey)))
+        .getSingleOrNull();
+
+    if (content.trim().isEmpty) {
+      if (existing != null) {
+        await (_db.delete(_db.notes)..where((n) => n.id.equals(existing.id))).go();
+      }
+      return;
+    }
+
+    if (existing == null) {
+      await _db.into(_db.notes).insert(
+            NotesCompanion.insert(
+              id: _uuid.v4(),
+              habitId: habitId,
+              date: dateKey,
+              content: content.trim(),
+            ),
+          );
+    } else {
+      await (_db.update(_db.notes)..where((n) => n.id.equals(existing.id))).write(
+        NotesCompanion(
+          content: Value(content.trim()),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    }
   }
 }

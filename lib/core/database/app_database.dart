@@ -9,6 +9,7 @@ import 'tables/habits_table.dart';
 import 'tables/completions_table.dart';
 import 'tables/categories_table.dart';
 import 'tables/reminders_table.dart';
+import 'tables/notes_table.dart';
 
 part 'app_database.g.dart';
 
@@ -18,20 +19,25 @@ part 'app_database.g.dart';
 /// Run code generation after editing any table:
 ///   dart run build_runner build --delete-conflicting-outputs
 @DriftDatabase(
-  tables: [Habits, Completions, Categories, HabitCategories, Reminders],
+  tables: [Habits, Completions, Categories, HabitCategories, Reminders, Notes],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
-  // Bump this and add a MigrationStrategy step whenever a table changes
-  // shape after the app has shipped.
+  // Bump this and add a migration step whenever a table changes shape after
+  // the app has real user data — onCreate alone only covers fresh installs.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.createTable(notes);
+          }
         },
       );
 }
