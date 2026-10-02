@@ -4,9 +4,9 @@ import '../../../../core/utils/date_utils.dart';
 import '../../domain/habit_type.dart';
 import 'color_palette.dart';
 
-const List<String> _monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+const List<String> _monthAbbreviations = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 const List<String> _weekdayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -110,7 +110,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
                 side: BorderSide(color: theme.colorScheme.outlineVariant),
               ),
               child: Text(
-                '${_monthNames[_visibleMonth.month - 1].substring(0, 4)} ${_visibleMonth.year}',
+                '${_monthAbbreviations[_visibleMonth.month - 1]} ${_visibleMonth.year}',
               ),
             ),
             Row(

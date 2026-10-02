@@ -1,1 +1,3 @@
 the quit habit hard is bugged, it makes every day selected from the entire calender and also crashes the app 
+cannot edit a habit after it has been created 
+visually its hard to see the habits calender to see/ it is very hard on the eyes for some colors (make it look good visually and feel wise)

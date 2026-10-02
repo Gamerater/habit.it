@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/database/app_database.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/utils/streak_calculator.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
@@ -23,6 +24,25 @@ class HabitDetailScreen extends ConsumerStatefulWidget {
 
 class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
   DateTime _selectedDate = DateOnly.today();
+  final Map<String, GlobalKey> _noteKeys = {};
+
+  GlobalKey _keyForDate(String dateKey) =>
+      _noteKeys.putIfAbsent(dateKey, () => GlobalKey());
+
+  void _scrollToNote(String dateKey) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = _noteKeys[dateKey];
+      final ctx = key?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 300),
+          alignment: 0.3,
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   Future<void> _editNote(String? existingContent) async {
     final controller = TextEditingController(text: existingContent ?? '');
@@ -62,6 +82,12 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
             content: result,
           );
     }
+  }
+
+  List<MapEntry<String, NoteRow>> _sortedNoteEntries(Map<String, NoteRow> notesByDate) {
+    final entries = notesByDate.entries.toList();
+    entries.sort((a, b) => b.key.compareTo(a.key)); // date strings sort lexically = chronologically
+    return entries;
   }
 
   String _formatDate(DateTime date) {
@@ -105,7 +131,6 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
             );
 
             final notesByDate = notesAsync.valueOrNull ?? const {};
-            final selectedNote = notesByDate[DateOnly.format(_selectedDate)]?.content;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -211,6 +236,11 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   datesWithNotes: notesByDate.keys.toSet(),
                   onDayTap: (date) {
                     repo.toggleToday(habit: habit, date: date);
+                    final dateKey = DateOnly.format(date);
+                    if (notesByDate.containsKey(dateKey)) {
+                      setState(() => _selectedDate = date);
+                      _scrollToNote(dateKey);
+                    }
                   },
                   onDayLongPress: (date) {
                     setState(() => _selectedDate = date);
@@ -219,52 +249,103 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Notes for the selected day.
-                GestureDetector(
-                  onTap: () => _editNote(selectedNote),
-                  child: Container(
+                // Notes feed — every note for this habit, newest first.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Notes', style: theme.textTheme.titleMedium),
+                    IconButton(
+                      icon: Icon(Icons.add_circle, color: accent),
+                      tooltip: 'Add a note for today',
+                      onPressed: () {
+                        setState(() => _selectedDate = DateOnly.today());
+                        _editNote(
+                          notesByDate[DateOnly.format(DateOnly.today())]?.content,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (notesByDate.isEmpty)
+                  Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.edit_note, color: accent),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                selectedNote?.isNotEmpty == true
-                                    ? _formatDate(_selectedDate)
-                                    : 'No notes yet',
-                                style: theme.textTheme.titleMedium,
-                              ),
-                              Text(
-                                selectedNote?.isNotEmpty == true
-                                    ? selectedNote!
-                                    : 'What went well? What got in the way?',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                        Text('No notes yet', style: theme.textTheme.titleMedium),
+                        Text(
+                          'What went well? What got in the way?',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-                          child: const Icon(Icons.add, size: 18, color: Colors.white),
                         ),
                       ],
                     ),
-                  ),
-                ),
+                  )
+                else
+                  ..._sortedNoteEntries(notesByDate).map((entry) {
+                    final dateKey = entry.key;
+                    final note = entry.value;
+                    final date = DateOnly.parse(dateKey);
+                    final isSelected = DateOnly.isSameDay(date, _selectedDate);
+
+                    return Padding(
+                      key: _keyForDate(dateKey),
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Dismissible(
+                        key: ValueKey(dateKey),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.error.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                        ),
+                        onDismissed: (_) => repo.setNote(
+                          habitId: habit.id,
+                          date: date,
+                          content: '',
+                        ),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedDate = date);
+                            _editNote(note.content);
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(18),
+                              border: isSelected
+                                  ? Border.all(color: accent, width: 1.5)
+                                  : null,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _formatDate(date),
+                                  style: theme.textTheme.labelLarge?.copyWith(color: accent),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(note.content, style: theme.textTheme.bodyMedium),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
               ],
             );
           },
