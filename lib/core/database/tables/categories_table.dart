@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'habits_table.dart';
 
+@DataClassName('CategoryRow')
 class Categories extends Table {
   TextColumn get id => text()();
   TextColumn get name => text().withLength(min: 1, max: 40)();

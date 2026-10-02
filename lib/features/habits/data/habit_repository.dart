@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../categories/domain/category.dart';
 import '../domain/habit.dart';
 import '../domain/habit_type.dart';
 
@@ -168,15 +169,13 @@ class HabitRepository {
         .getSingleOrNull();
 
     if (habit.type.isBuild) {
-      final isDone = existing != null && existing.value >= habit.targetPerDay;
-      if (isDone) {
+      if (existing != null && existing.value >= habit.targetPerDay) {
         await (_db.delete(_db.completions)..where((c) => c.id.equals(existing.id))).go();
       } else {
         await setCompletion(habitId: habit.id, date: date, value: habit.targetPerDay);
       }
     } else {
-      final isSlipped = existing?.isSlip ?? false;
-      if (isSlipped) {
+      if (existing != null && existing.isSlip) {
         await (_db.delete(_db.completions)..where((c) => c.id.equals(existing.id))).go();
       } else {
         await setCompletion(habitId: habit.id, date: date, isSlip: true, value: 0);
@@ -240,6 +239,45 @@ class HabitRepository {
           updatedAt: Value(DateTime.now()),
         ),
       );
+    }
+  }
+
+  // --- Categories -----------------------------------------------------
+
+  Stream<List<Category>> watchCategories() {
+    final query = _db.select(_db.categories)
+      ..orderBy([(c) => OrderingTerm.asc(c.sortOrder)]);
+    return query.watch().map(
+          (List<CategoryRow> rows) => [
+            for (final r in rows)
+              Category(id: r.id, name: r.name, icon: r.icon, color: r.color),
+          ],
+        );
+  }
+
+  Future<String> createCategory({
+    required String name,
+    required String icon,
+    required String color,
+  }) async {
+    final id = _uuid.v4();
+    await _db.into(_db.categories).insert(
+          CategoriesCompanion.insert(id: id, name: name, icon: icon, color: color),
+        );
+    return id;
+  }
+
+  Future<void> deleteCategory(String categoryId) async {
+    await (_db.delete(_db.categories)..where((c) => c.id.equals(categoryId))).go();
+  }
+
+  /// Replaces a habit's full set of category assignments with [categoryIds].
+  Future<void> setHabitCategories(String habitId, List<String> categoryIds) async {
+    await (_db.delete(_db.habitCategories)..where((hc) => hc.habitId.equals(habitId))).go();
+    for (final categoryId in categoryIds) {
+      await _db.into(_db.habitCategories).insert(
+            HabitCategoriesCompanion.insert(habitId: habitId, categoryId: categoryId),
+          );
     }
   }
 }

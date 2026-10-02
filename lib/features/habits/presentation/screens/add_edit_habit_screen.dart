@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../categories/presentation/providers/categories_provider.dart';
+import '../../../categories/presentation/screens/category_picker_screen.dart';
 import '../../../icon_picker/presentation/icon_picker_screen.dart';
 import '../../domain/habit_type.dart';
 import '../providers/habits_provider.dart';
@@ -22,6 +24,7 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
   HabitType _type = HabitType.build;
   String _color = habitColorPalette.first;
   String _icon = 'ic_fitness_center';
+  List<String> _categoryIds = [];
 
   @override
   void dispose() {
@@ -37,6 +40,15 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
     if (result != null) setState(() => _icon = result);
   }
 
+  Future<void> _pickCategories() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => CategoryPickerScreen(initiallySelected: _categoryIds),
+      ),
+    );
+    if (result != null) setState(() => _categoryIds = result);
+  }
+
   Future<void> _save() async {
     if (_nameController.text.trim().isEmpty) return;
 
@@ -48,6 +60,7 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
           icon: _icon,
           color: _color,
           type: _type,
+          categoryIds: _categoryIds,
         );
 
     if (mounted) context.pop();
@@ -100,25 +113,75 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          const _FieldLabel('Name'),
+          _FieldLabel('Name'),
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(hintText: 'e.g. Morning run'),
           ),
           const SizedBox(height: 20),
-          const _FieldLabel('Description'),
+          _FieldLabel('Description'),
           TextField(
             controller: _descriptionController,
             decoration: const InputDecoration(hintText: 'Optional'),
           ),
           const SizedBox(height: 24),
-          const _FieldLabel('Color'),
+          _FieldLabel('Color'),
           ColorPaletteGrid(
             selectedHex: _color,
             onSelected: (hex) => setState(() => _color = hex),
           ),
           const SizedBox(height: 24),
-          const _FieldLabel('Habit Type'),
+          _FieldLabel('Categories'),
+          Consumer(
+            builder: (context, ref, _) {
+              final categoriesAsync = ref.watch(categoriesProvider);
+              final allCategories = categoriesAsync.valueOrNull ?? [];
+              final selected = allCategories
+                  .where((c) => _categoryIds.contains(c.id))
+                  .toList();
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: _pickCategories,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: selected.isEmpty
+                            ? Text(
+                                'None',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              )
+                            : Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final category in selected)
+                                    Chip(
+                                      label: Text(category.name),
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                ],
+                              ),
+                      ),
+                      Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          _FieldLabel('Habit Type'),
           SegmentedButton<HabitType>(
             segments: const [
               ButtonSegment(
