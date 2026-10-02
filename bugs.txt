@@ -1,0 +1,1 @@
+the quit habit hard is bugged, it makes every day selected from the entire calender and also crashes the app 
