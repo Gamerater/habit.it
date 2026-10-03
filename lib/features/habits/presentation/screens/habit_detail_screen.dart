@@ -168,9 +168,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
                       tooltip: 'Edit habit',
-                      onPressed: () {
-                        // TODO: wire to AddEditHabitScreen in edit mode.
-                      },
+                      onPressed: () => context.push('/habits/edit', extra: habit),
                     ),
                   ],
                 ),

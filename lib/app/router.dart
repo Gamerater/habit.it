@@ -37,6 +37,11 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const AddEditHabitScreen(),
     ),
     GoRoute(
+      path: '/habits/edit',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => AddEditHabitScreen(existingHabit: state.extra as Habit),
+    ),
+    GoRoute(
       path: '/habits/detail',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => HabitDetailScreen(habit: state.extra as Habit),

@@ -5,13 +5,20 @@ import 'package:go_router/go_router.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
 import '../../../categories/presentation/screens/category_picker_screen.dart';
 import '../../../icon_picker/presentation/icon_picker_screen.dart';
+import '../../domain/habit.dart';
 import '../../domain/habit_type.dart';
 import '../providers/habits_provider.dart';
 import '../widgets/color_palette.dart';
 import '../widgets/habit_avatar.dart';
 
 class AddEditHabitScreen extends ConsumerStatefulWidget {
-  const AddEditHabitScreen({super.key});
+  /// When non-null, the screen opens in edit mode, prefilled from this habit,
+  /// and Save updates it in place instead of creating a new one.
+  final Habit? existingHabit;
+
+  const AddEditHabitScreen({super.key, this.existingHabit});
+
+  bool get isEditing => existingHabit != null;
 
   @override
   ConsumerState<AddEditHabitScreen> createState() =>
@@ -19,12 +26,14 @@ class AddEditHabitScreen extends ConsumerStatefulWidget {
 }
 
 class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  HabitType _type = HabitType.build;
-  String _color = habitColorPalette.first;
-  String _icon = 'ic_fitness_center';
-  List<String> _categoryIds = [];
+  late final _nameController =
+      TextEditingController(text: widget.existingHabit?.name ?? '');
+  late final _descriptionController =
+      TextEditingController(text: widget.existingHabit?.description ?? '');
+  late HabitType _type = widget.existingHabit?.type ?? HabitType.build;
+  late String _color = widget.existingHabit?.color ?? habitColorPalette.first;
+  late String _icon = widget.existingHabit?.icon ?? 'ic_fitness_center';
+  late List<String> _categoryIds = widget.existingHabit?.categoryIds ?? [];
 
   @override
   void dispose() {
@@ -52,16 +61,34 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
   Future<void> _save() async {
     if (_nameController.text.trim().isEmpty) return;
 
-    await ref.read(habitRepositoryProvider).createHabit(
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
-          icon: _icon,
-          color: _color,
-          type: _type,
-          categoryIds: _categoryIds,
-        );
+    final repo = ref.read(habitRepositoryProvider);
+    final name = _nameController.text.trim();
+    final description =
+        _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim();
+
+    if (widget.isEditing) {
+      await repo.updateHabit(
+        id: widget.existingHabit!.id,
+        name: name,
+        description: description,
+        icon: _icon,
+        color: _color,
+        type: _type,
+        trackingMode: widget.existingHabit!.trackingMode,
+        targetPerDay: widget.existingHabit!.targetPerDay,
+        streakGoal: widget.existingHabit!.streakGoal,
+        categoryIds: _categoryIds,
+      );
+    } else {
+      await repo.createHabit(
+        name: name,
+        description: description,
+        icon: _icon,
+        color: _color,
+        type: _type,
+        categoryIds: _categoryIds,
+      );
+    }
 
     if (mounted) context.pop();
   }
@@ -72,7 +99,7 @@ class _AddEditHabitScreenState extends ConsumerState<AddEditHabitScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Habit'),
+        title: Text(widget.isEditing ? 'Edit Habit' : 'New Habit'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),

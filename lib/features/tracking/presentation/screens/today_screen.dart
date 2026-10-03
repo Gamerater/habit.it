@@ -8,6 +8,7 @@ import '../../../habits/presentation/providers/habits_provider.dart';
 import '../../../habits/presentation/widgets/color_palette.dart';
 import '../../../habits/presentation/widgets/habit_avatar.dart';
 import '../../../habits/presentation/widgets/habit_heatmap.dart';
+import '../../../habits/presentation/widgets/habit_options_sheet.dart';
 
 /// Main tracking screen: one full-width card per habit — icon, name,
 /// description, a today check button, and a large heatmap — matching the
@@ -77,6 +78,7 @@ class _HabitCard extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () => context.push('/habits/detail', extra: habit),
+      onLongPress: () => showHabitOptionsSheet(context, ref, habit),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(

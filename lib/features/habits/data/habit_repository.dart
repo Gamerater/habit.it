@@ -110,6 +110,47 @@ class HabitRepository {
     return id;
   }
 
+  /// Updates an existing habit's fields in place. Categories are replaced
+  /// wholesale via [setHabitCategories] rather than diffed, since the picker
+  /// always returns the full final selection.
+  Future<void> updateHabit({
+    required String id,
+    required String name,
+    String? description,
+    required String icon,
+    required String color,
+    required HabitType type,
+    TrackingMode trackingMode = TrackingMode.stepByStep,
+    int targetPerDay = 1,
+    int? streakGoal,
+    List<String> categoryIds = const [],
+  }) async {
+    await (_db.update(_db.habits)..where((h) => h.id.equals(id))).write(
+      HabitsCompanion(
+        name: Value(name),
+        description: Value(description),
+        icon: Value(icon),
+        color: Value(color),
+        type: Value(type.isQuit ? 'quit' : 'build'),
+        trackingMode: Value(
+          trackingMode == TrackingMode.customValue ? 'customValue' : 'stepByStep',
+        ),
+        targetPerDay: Value(targetPerDay),
+        streakGoal: Value(streakGoal),
+      ),
+    );
+    await setHabitCategories(id, categoryIds);
+  }
+
+  /// Persists a new manual order after a drag-to-reorder — [orderedIds] is
+  /// the full list of active habit ids in their new display order.
+  Future<void> reorderHabits(List<String> orderedIds) async {
+    for (var i = 0; i < orderedIds.length; i++) {
+      await (_db.update(_db.habits)..where((h) => h.id.equals(orderedIds[i])))
+          .write(HabitsCompanion(sortOrder: Value(i)));
+    }
+  }
+
   Future<void> archiveHabit(String habitId, {bool archived = true}) async {
     await (_db.update(_db.habits)..where((h) => h.id.equals(habitId))).write(
       HabitsCompanion(

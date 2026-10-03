@@ -9,6 +9,7 @@ import '../providers/habits_provider.dart';
 import '../widgets/color_palette.dart';
 import '../widgets/habit_avatar.dart';
 import '../widgets/habit_heatmap.dart';
+import '../widgets/habit_options_sheet.dart';
 
 enum _ViewMode { list, grid }
 
@@ -73,62 +74,86 @@ class _HabitListScreenState extends ConsumerState<HabitListScreen> {
 
           return _mode == _ViewMode.grid
               ? _GridView(habits: habits)
-              : _ListView(habits: habits);
+              : _ReorderableList(habits: habits);
         },
       ),
     );
   }
 }
 
-class _ListView extends StatelessWidget {
+/// List view with drag-to-reorder. Dragging is only triggered from the grip
+/// handle on the right (ReorderableDragStartListener), so tap/long-press on
+/// the rest of the row stay free for navigation and the options sheet
+/// without fighting the drag gesture for priority.
+class _ReorderableList extends ConsumerWidget {
   final List<Habit> habits;
 
-  const _ListView({required this.habits});
+  const _ReorderableList({required this.habits});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
-    return ListView.separated(
+    return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       itemCount: habits.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      onReorder: (oldIndex, newIndex) {
+        final adjustedNewIndex = newIndex > oldIndex ? newIndex - 1 : newIndex;
+        final reordered = [...habits];
+        final moved = reordered.removeAt(oldIndex);
+        reordered.insert(adjustedNewIndex, moved);
+        ref
+            .read(habitRepositoryProvider)
+            .reorderHabits(reordered.map((h) => h.id).toList());
+      },
       itemBuilder: (context, i) {
         final habit = habits[i];
         final accent = hexToColor(habit.color);
 
-        return InkWell(
-          onTap: () => context.push('/habits/detail', extra: habit),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 3,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+        return Column(
+          key: ValueKey(habit.id),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: () => context.push('/habits/detail', extra: habit),
+              onLongPress: () => showHabitOptionsSheet(context, ref, habit),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 3,
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: accent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: Text(habit.name, style: theme.textTheme.titleMedium),
+                      ),
+                    ),
+                    ReorderableDragStartListener(
+                      index: i,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(
+                          Icons.drag_handle,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 40),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    child: Text(habit.name, style: theme.textTheme.titleMedium),
-                  ),
-                ),
-                Center(
-                  child: Icon(
-                    Icons.chevron_right,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            const Divider(height: 1),
+          ],
         );
       },
     );
@@ -191,6 +216,7 @@ class _HabitHeatmapCard extends ConsumerWidget {
         return InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => context.push('/habits/detail', extra: habit),
+          onLongPress: () => showHabitOptionsSheet(context, ref, habit),
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(

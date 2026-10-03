@@ -26,3 +26,7 @@ android/**/gradle-wrapper.jar
 
 # macOS
 .DS_Store
+
+
+#bugs 
+bugs.txt
