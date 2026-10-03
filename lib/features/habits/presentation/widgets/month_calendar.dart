@@ -20,6 +20,7 @@ class MonthCalendar extends StatefulWidget {
   final String colorHex;
   final Map<String, ({int value, bool isSlip})> completionsByDate;
   final Set<String> datesWithNotes;
+  final DateTime habitCreatedAt;
   final ValueChanged<DateTime> onDayTap;
   final ValueChanged<DateTime> onDayLongPress;
 
@@ -30,6 +31,7 @@ class MonthCalendar extends StatefulWidget {
     required this.colorHex,
     required this.completionsByDate,
     required this.datesWithNotes,
+    required this.habitCreatedAt,
     required this.onDayTap,
     required this.onDayLongPress,
   });
@@ -62,6 +64,15 @@ class _MonthCalendarState extends State<MonthCalendar> {
     return entry == null || !entry.isSlip;
   }
 
+  bool _isBeforeCreation(DateTime date) {
+    final createdDay = DateTime(
+      widget.habitCreatedAt.year,
+      widget.habitCreatedAt.month,
+      widget.habitCreatedAt.day,
+    );
+    return date.isBefore(createdDay);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -85,7 +96,8 @@ class _MonthCalendarState extends State<MonthCalendar> {
                     date: days[row * 7 + col],
                     inCurrentMonth: days[row * 7 + col].month == _visibleMonth.month,
                     isToday: DateOnly.isSameDay(days[row * 7 + col], today),
-                    isFuture: days[row * 7 + col].isAfter(today),
+                    isDisabled: days[row * 7 + col].isAfter(today) ||
+                        _isBeforeCreation(days[row * 7 + col]),
                     isGood: _isGoodDay(days[row * 7 + col]),
                     hasNote: widget.datesWithNotes.contains(
                       DateOnly.format(days[row * 7 + col]),
@@ -166,7 +178,7 @@ class _DayCell extends StatelessWidget {
   final DateTime date;
   final bool inCurrentMonth;
   final bool isToday;
-  final bool isFuture;
+  final bool isDisabled; // future OR before the habit was created
   final bool isGood;
   final bool hasNote;
   final Color accent;
@@ -177,7 +189,7 @@ class _DayCell extends StatelessWidget {
     required this.date,
     required this.inCurrentMonth,
     required this.isToday,
-    required this.isFuture,
+    required this.isDisabled,
     required this.isGood,
     required this.hasNote,
     required this.accent,
@@ -188,9 +200,9 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final highlight = !isFuture && isGood;
+    final highlight = !isDisabled && isGood;
 
-    final textColor = isFuture
+    final textColor = isDisabled
         ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
         : (highlight
             ? (ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
@@ -201,8 +213,8 @@ class _DayCell extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(3),
       child: GestureDetector(
-        onTap: isFuture ? null : onTap,
-        onLongPress: isFuture ? null : onLongPress,
+        onTap: isDisabled ? null : onTap,
+        onLongPress: isDisabled ? null : onLongPress,
         child: AspectRatio(
           aspectRatio: 1,
           child: Container(

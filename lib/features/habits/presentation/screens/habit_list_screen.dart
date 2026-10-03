@@ -177,6 +177,7 @@ class _HabitHeatmapCard extends ConsumerWidget {
         final streak = StreakCalculator.currentStreak(
           type: habit.type,
           targetPerDay: habit.targetPerDay,
+          habitCreatedAt: habit.createdAt,
           entries: [
             for (final r in rows)
               CompletionEntry(
@@ -229,6 +230,7 @@ class _HabitHeatmapCard extends ConsumerWidget {
                     targetPerDay: habit.targetPerDay,
                     colorHex: habit.color,
                     completionsByDate: byDate,
+                    habitCreatedAt: habit.createdAt,
                   ),
                 ),
               ],

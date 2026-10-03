@@ -12,6 +12,7 @@ class HabitHeatmap extends StatelessWidget {
   final int targetPerDay;
   final String colorHex;
   final Map<String, ({int value, bool isSlip})> completionsByDate;
+  final DateTime habitCreatedAt;
   final int days;
   final int columns;
 
@@ -21,6 +22,7 @@ class HabitHeatmap extends StatelessWidget {
     required this.targetPerDay,
     required this.colorHex,
     required this.completionsByDate,
+    required this.habitCreatedAt,
     this.days = 35,
     this.columns = 7,
   });
@@ -58,7 +60,7 @@ class HabitHeatmap extends StatelessWidget {
               for (final date in dates)
                 _Cell(
                   size: cellSize,
-                  filled: _isGoodDay(date),
+                  state: _stateFor(date),
                   accent: accent,
                 ),
             ],
@@ -68,33 +70,48 @@ class HabitHeatmap extends StatelessWidget {
     );
   }
 
-  bool _isGoodDay(DateTime date) {
+  _CellState _stateFor(DateTime date) {
+    final createdDay = DateTime(
+      habitCreatedAt.year,
+      habitCreatedAt.month,
+      habitCreatedAt.day,
+    );
+    if (date.isBefore(createdDay)) return _CellState.blank;
+
     final entry = completionsByDate[DateOnly.format(date)];
-    if (type.isBuild) {
-      return entry != null && entry.value >= targetPerDay;
-    }
-    return entry == null || !entry.isSlip;
+    final isGood = type.isBuild
+        ? (entry != null && entry.value >= targetPerDay)
+        : (entry == null || !entry.isSlip);
+    return isGood ? _CellState.good : _CellState.notGood;
   }
 }
 
+enum _CellState { good, notGood, blank }
+
 class _Cell extends StatelessWidget {
   final double size;
-  final bool filled;
+  final _CellState state;
   final Color accent;
 
   const _Cell({
     required this.size,
-    required this.filled,
+    required this.state,
     required this.accent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = switch (state) {
+      _CellState.good => accent,
+      _CellState.notGood => accent.withValues(alpha: 0.1),
+      _CellState.blank => Colors.transparent,
+    };
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: filled ? accent : accent.withValues(alpha: 0.1),
+        color: color,
         borderRadius: BorderRadius.circular(size * 0.3),
       ),
     );

@@ -18,6 +18,7 @@ class YearHeatmap extends StatefulWidget {
   final int targetPerDay;
   final String colorHex;
   final Map<String, ({int value, bool isSlip})> completionsByDate;
+  final DateTime habitCreatedAt;
 
   const YearHeatmap({
     super.key,
@@ -25,6 +26,7 @@ class YearHeatmap extends StatefulWidget {
     required this.targetPerDay,
     required this.colorHex,
     required this.completionsByDate,
+    required this.habitCreatedAt,
   });
 
   @override
@@ -67,14 +69,23 @@ class _YearHeatmapState extends State<YearHeatmap> {
     final totalDays = today.difference(gridStart).inDays + 1;
     final columnCount = (totalDays / 7).ceil();
 
+    final createdDay = DateTime(
+      widget.habitCreatedAt.year,
+      widget.habitCreatedAt.month,
+      widget.habitCreatedAt.day,
+    );
+
     // Build columns of 7 (Mon..Sun); null for days after today (partial
-    // trailing week) so they render as blank instead of "not done".
+    // trailing week) or before the habit existed, so they render as blank
+    // instead of a false "not done" or, worse, a false "clean" for quit
+    // habits with no logged history yet.
     final columns = <List<DateTime?>>[];
     for (int c = 0; c < columnCount; c++) {
       final column = <DateTime?>[];
       for (int r = 0; r < 7; r++) {
         final date = gridStart.add(Duration(days: c * 7 + r));
-        column.add(date.isAfter(today) ? null : date);
+        final outOfRange = date.isAfter(today) || date.isBefore(createdDay);
+        column.add(outOfRange ? null : date);
       }
       columns.add(column);
     }

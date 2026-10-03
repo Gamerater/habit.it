@@ -127,6 +127,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
             final currentStreak = StreakCalculator.currentStreak(
               type: habit.type,
               targetPerDay: habit.targetPerDay,
+              habitCreatedAt: habit.createdAt,
               entries: entries,
             );
 
@@ -188,6 +189,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                     targetPerDay: habit.targetPerDay,
                     colorHex: habit.color,
                     completionsByDate: byDate,
+                    habitCreatedAt: habit.createdAt,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -234,6 +236,7 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   colorHex: habit.color,
                   completionsByDate: byDate,
                   datesWithNotes: notesByDate.keys.toSet(),
+                  habitCreatedAt: habit.createdAt,
                   onDayTap: (date) {
                     repo.toggleToday(habit: habit, date: date);
                     final dateKey = DateOnly.format(date);

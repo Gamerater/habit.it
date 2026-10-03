@@ -154,6 +154,7 @@ class _HabitCard extends ConsumerWidget {
                 targetPerDay: habit.targetPerDay,
                 colorHex: habit.color,
                 completionsByDate: byDate,
+                habitCreatedAt: habit.createdAt,
                 days: 120,
                 columns: 24,
               ),
