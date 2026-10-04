@@ -10,10 +10,15 @@ const List<String> _monthAbbreviations = [
 ];
 const List<String> _weekdayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/// How many days back (today inclusive) can be backfilled — lets someone
+/// catch up on a missed day without allowing unlimited retroactive editing
+/// of very old history.
+const int editableWindowDays = 14;
+
 /// A full month calendar: tap a day to toggle its completion, long-press to
-/// add/edit a note. Shows the tracked state of adjacent-month spillover days
-/// too (not just blank), since those days still have real data if the habit
-/// existed then.
+/// add/edit a note. A day is editable when it's today or up to
+/// [editableWindowDays] days in the past, AND on/after the habit's creation
+/// date — whichever floor is later wins. Future days are never editable.
 class MonthCalendar extends StatefulWidget {
   final HabitType type;
   final int targetPerDay;
@@ -73,6 +78,16 @@ class _MonthCalendarState extends State<MonthCalendar> {
     return date.isBefore(createdDay);
   }
 
+  /// Only today and the previous [editableWindowDays - 1] days are editable.
+  bool _isTooFarInPast(DateTime date, DateTime today) {
+    final earliestEditable = today.subtract(const Duration(days: editableWindowDays - 1));
+    return date.isBefore(earliestEditable);
+  }
+
+  bool _isDisabled(DateTime date, DateTime today) {
+    return date.isAfter(today) || _isBeforeCreation(date) || _isTooFarInPast(date, today);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -96,8 +111,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
                     date: days[row * 7 + col],
                     inCurrentMonth: days[row * 7 + col].month == _visibleMonth.month,
                     isToday: DateOnly.isSameDay(days[row * 7 + col], today),
-                    isDisabled: days[row * 7 + col].isAfter(today) ||
-                        _isBeforeCreation(days[row * 7 + col]),
+                    isDisabled: _isDisabled(days[row * 7 + col], today),
                     isGood: _isGoodDay(days[row * 7 + col]),
                     hasNote: widget.datesWithNotes.contains(
                       DateOnly.format(days[row * 7 + col]),
@@ -142,7 +156,8 @@ class _MonthCalendarState extends State<MonthCalendar> {
         const SizedBox(height: 8),
         Center(
           child: Text(
-            'Tap a day to toggle it. Press and hold to add a note.',
+            'Tap a day to toggle it (up to $editableWindowDays days back). Press and hold to add a note.',
+            textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -178,7 +193,7 @@ class _DayCell extends StatelessWidget {
   final DateTime date;
   final bool inCurrentMonth;
   final bool isToday;
-  final bool isDisabled; // future OR before the habit was created
+  final bool isDisabled;
   final bool isGood;
   final bool hasNote;
   final Color accent;
