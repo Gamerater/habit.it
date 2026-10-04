@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
@@ -15,56 +17,82 @@ class HabitRepository {
   HabitRepository(this._db);
 
   /// Live stream of active (non-archived) habits, ordered for display.
-  Stream<List<Habit>> watchActiveHabits() {
-    final query = _db.select(_db.habits)
-      ..where((h) => h.archivedAt.isNull())
-      ..orderBy([(h) => OrderingTerm.asc(h.sortOrder)]);
+  Stream<List<Habit>> watchActiveHabits() => _watchHabitsWithCategories(archived: false);
 
-    return query.watch().asyncMap((rows) async {
-      final habits = <Habit>[];
-      for (final row in rows) {
-        habits.add(await _toDomain(row));
+  Stream<List<Habit>> watchArchivedHabits() => _watchHabitsWithCategories(archived: true);
+
+  /// Combines the habits table and the habit<->category join table into one
+  /// reactive stream that re-emits when EITHER changes.
+  ///
+  /// This matters because a plain `select(habits).watch()` only tracks the
+  /// `habits` table — Drift determines reactivity from the query's own SQL,
+  /// and a separate category lookup done inside the stream's callback is
+  /// invisible to it. That was the bug: editing a habit's categories only
+  /// writes to `habit_categories`, never to `habits`, so nothing told the
+  /// old stream to refresh. Listening to both tables directly and
+  /// recombining on every emission from either fixes it properly.
+  Stream<List<Habit>> _watchHabitsWithCategories({required bool archived}) {
+    late final StreamController<List<Habit>> controller;
+    StreamSubscription<List<HabitRow>>? habitsSub;
+    StreamSubscription<List<HabitCategoryLink>>? linksSub;
+
+    List<HabitRow>? latestHabits;
+    List<HabitCategoryLink>? latestLinks;
+
+    void emit() {
+      final habits = latestHabits;
+      final links = latestLinks;
+      if (habits == null || links == null) return;
+
+      final categoryIdsByHabit = <String, List<String>>{};
+      for (final link in links) {
+        categoryIdsByHabit.putIfAbsent(link.habitId, () => []).add(link.categoryId);
       }
-      return habits;
-    });
-  }
 
-  Stream<List<Habit>> watchArchivedHabits() {
-    final query = _db.select(_db.habits)
-      ..where((h) => h.archivedAt.isNotNull())
-      ..orderBy([(h) => OrderingTerm.asc(h.sortOrder)]);
+      controller.add([
+        for (final row in habits)
+          Habit(
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            icon: row.icon,
+            color: row.color,
+            type: row.type == 'quit' ? HabitType.quit : HabitType.build,
+            trackingMode: row.trackingMode == 'customValue'
+                ? TrackingMode.customValue
+                : TrackingMode.stepByStep,
+            targetPerDay: row.targetPerDay,
+            streakGoal: row.streakGoal,
+            sortOrder: row.sortOrder,
+            createdAt: row.createdAt,
+            archivedAt: row.archivedAt,
+            categoryIds: categoryIdsByHabit[row.id] ?? const [],
+          ),
+      ]);
+    }
 
-    return query.watch().asyncMap((rows) async {
-      final habits = <Habit>[];
-      for (final row in rows) {
-        habits.add(await _toDomain(row));
-      }
-      return habits;
-    });
-  }
+    controller = StreamController<List<Habit>>.broadcast(
+      onListen: () {
+        final habitsQuery = _db.select(_db.habits)
+          ..where((h) => archived ? h.archivedAt.isNotNull() : h.archivedAt.isNull())
+          ..orderBy([(h) => OrderingTerm.asc(h.sortOrder)]);
 
-  Future<Habit> _toDomain(HabitRow row) async {
-    final links = await (_db.select(_db.habitCategories)
-          ..where((c) => c.habitId.equals(row.id)))
-        .get();
-
-    return Habit(
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      icon: row.icon,
-      color: row.color,
-      type: row.type == 'quit' ? HabitType.quit : HabitType.build,
-      trackingMode: row.trackingMode == 'customValue'
-          ? TrackingMode.customValue
-          : TrackingMode.stepByStep,
-      targetPerDay: row.targetPerDay,
-      streakGoal: row.streakGoal,
-      sortOrder: row.sortOrder,
-      createdAt: row.createdAt,
-      archivedAt: row.archivedAt,
-      categoryIds: links.map((l) => l.categoryId).toList(),
+        habitsSub = habitsQuery.watch().listen((rows) {
+          latestHabits = rows;
+          emit();
+        });
+        linksSub = _db.select(_db.habitCategories).watch().listen((rows) {
+          latestLinks = rows;
+          emit();
+        });
+      },
+      onCancel: () {
+        habitsSub?.cancel();
+        linksSub?.cancel();
+      },
     );
+
+    return controller.stream;
   }
 
   Future<String> createHabit({

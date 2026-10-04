@@ -14,6 +14,7 @@ class Categories extends Table {
 }
 
 /// Many-to-many join between habits and categories.
+@DataClassName('HabitCategoryLink')
 class HabitCategories extends Table {
   TextColumn get habitId =>
       text().references(Habits, #id, onDelete: KeyAction.cascade)();
