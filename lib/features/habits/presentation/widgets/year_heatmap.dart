@@ -4,15 +4,19 @@ import '../../../../core/utils/date_utils.dart';
 import '../../domain/habit_type.dart';
 import 'color_palette.dart';
 
-const List<String> _monthNames = [
+const double _cell = 7;
+const double _spacing = 1.5;
+const double _gutterWidth = 20;
+const List<String> _monthAbbreviations = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+const List<String> _weekdayHeaders = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-/// A year of history as a GitHub-contributions-style grid: columns are
-/// weeks (Monday at the top, Sunday at the bottom), scrolls horizontally,
-/// auto-scrolled to today on open, with month labels above the column
-/// where each month starts.
+/// A true calendar-year heatmap — Jan 1 through Dec 31 (365 dots, or 366 on
+/// a leap year), weeks stacked as rows reading top-to-bottom rather than
+/// GitHub's left-to-right week columns. Navigate between years the same way
+/// MonthCalendar navigates months.
 class YearHeatmap extends StatefulWidget {
   final HabitType type;
   final int targetPerDay;
@@ -34,40 +38,21 @@ class YearHeatmap extends StatefulWidget {
 }
 
 class _YearHeatmapState extends State<YearHeatmap> {
-  final _scrollController = ScrollController();
-  static const double _cell = 14;
-  static const double _spacing = 4;
-  static const double _columnWidth = _cell + _spacing;
+  late int _visibleYear = DateOnly.today().year;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  bool _isGoodDay(DateTime date) {
+    final entry = widget.completionsByDate[DateOnly.format(date)];
+    if (widget.type.isBuild) {
+      return entry != null && entry.value >= widget.targetPerDay;
+    }
+    return entry == null || !entry.isSlip;
   }
 
   @override
   Widget build(BuildContext context) {
-    final accent = hexToColor(widget.colorHex);
     final theme = Theme.of(context);
+    final accent = hexToColor(widget.colorHex);
     final today = DateOnly.today();
-
-    // Align the grid start to the Monday on/before (today - 364 days) so
-    // every column is a clean Monday-to-Sunday week.
-    final roughStart = today.subtract(const Duration(days: 364));
-    final gridStart = roughStart.subtract(Duration(days: roughStart.weekday - 1));
-
-    final totalDays = today.difference(gridStart).inDays + 1;
-    final columnCount = (totalDays / 7).ceil();
 
     final createdDay = DateTime(
       widget.habitCreatedAt.year,
@@ -75,138 +60,172 @@ class _YearHeatmapState extends State<YearHeatmap> {
       widget.habitCreatedAt.day,
     );
 
-    // Build columns of 7 (Mon..Sun); null for days after today (partial
-    // trailing week) or before the habit existed, so they render as blank
-    // instead of a false "not done" or, worse, a false "clean" for quit
-    // habits with no logged history yet.
-    final columns = <List<DateTime?>>[];
-    for (int c = 0; c < columnCount; c++) {
-      final column = <DateTime?>[];
-      for (int r = 0; r < 7; r++) {
-        final date = gridStart.add(Duration(days: c * 7 + r));
-        final outOfRange = date.isAfter(today) || date.isBefore(createdDay);
-        column.add(outOfRange ? null : date);
-      }
-      columns.add(column);
-    }
+    final jan1 = DateTime(_visibleYear, 1, 1);
+    final dec31 = DateTime(_visibleYear, 12, 31);
+    final isLeapYear = dec31.difference(jan1).inDays + 1 == 366;
 
-    bool isGoodDay(DateTime date) {
-      final entry = widget.completionsByDate[DateOnly.format(date)];
-      if (widget.type.isBuild) {
-        return entry != null && entry.value >= widget.targetPerDay;
-      }
-      return entry == null || !entry.isSlip;
-    }
+    // Pad back to the Monday on/before Jan 1 so weeks align Mon..Sun, and
+    // forward enough rows to cover through Dec 31.
+    final gridStart = jan1.subtract(Duration(days: jan1.weekday - 1));
+    final daySpan = dec31.difference(gridStart).inDays + 1;
+    final rowCount = (daySpan / 7).ceil();
 
-    String? monthLabelFor(int columnIndex) {
-      final firstDayOfColumn = columns[columnIndex].firstWhere(
-        (d) => d != null,
-        orElse: () => null,
-      );
-      if (firstDayOfColumn == null) return null;
-      if (firstDayOfColumn.day > 7) return null; // only label a month once
-      if (columnIndex == 0) return _monthNames[firstDayOfColumn.month - 1];
-
-      final prevColumnDay = columns[columnIndex - 1].firstWhere(
-        (d) => d != null,
-        orElse: () => null,
-      );
-      if (prevColumnDay == null || prevColumnDay.month != firstDayOfColumn.month) {
-        return _monthNames[firstDayOfColumn.month - 1];
-      }
-      return null;
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Fixed weekday labels (Tue/Thu/Sat, GitHub-style sparse labeling),
-        // not part of the horizontal scroll so they stay pinned on the left.
-        Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20), // matches month-label row height
-              for (int r = 0; r < 7; r++)
-                SizedBox(
-                  height: _columnWidth,
-                  child: (r == 1 || r == 3 || r == 5)
-                      ? Text(
-                          const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][r],
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        )
-                      : null,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$_visibleYear${isLeapYear ? ' · 366 days' : ' · 365 days'}',
+              style: theme.textTheme.labelLarge,
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _NavButton(
+                  icon: Icons.chevron_left,
+                  onTap: () => setState(() => _visibleYear--),
                 ),
-            ],
-          ),
+                const SizedBox(width: 4),
+                _NavButton(
+                  icon: Icons.chevron_right,
+                  onTap: _visibleYear >= today.year
+                      ? null
+                      : () => setState(() => _visibleYear++),
+                ),
+              ],
+            ),
+          ],
         ),
-        Expanded(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            scrollDirection: Axis.horizontal,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 16,
-                    width: columnCount * _columnWidth,
-                    child: Stack(
-                      children: [
-                        for (int c = 0; c < columnCount; c++)
-                          if (monthLabelFor(c) != null)
-                            Positioned(
-                              left: c * _columnWidth,
-                              child: Text(
-                                monthLabelFor(c)!,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                      ],
+        const SizedBox(height: 3),
+        // Weekday header: blank gutter (for month labels) + M T W T F S S.
+        Row(
+          children: [
+            const SizedBox(width: _gutterWidth),
+            for (final label in _weekdayHeaders)
+              SizedBox(
+                width: _cell + _spacing,
+                child: Center(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 8,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final column in columns)
-                        Padding(
-                          padding: const EdgeInsets.only(right: _spacing),
-                          child: Column(
-                            children: [
-                              for (final date in column)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: _spacing),
-                                  child: Container(
-                                    width: _cell,
-                                    height: _cell,
-                                    decoration: BoxDecoration(
-                                      color: date == null
-                                          ? Colors.transparent
-                                          : (isGoodDay(date)
-                                              ? accent
-                                              : accent.withValues(alpha: 0.1)),
-                                      borderRadius: BorderRadius.circular(_cell * 0.3),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
+                ),
               ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        for (int row = 0; row < rowCount; row++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: _spacing),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _gutterWidth,
+                  child: Text(
+                    _monthLabelForRow(row, gridStart),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 8,
+                    ),
+                  ),
+                ),
+                for (int col = 0; col < 7; col++)
+                  Padding(
+                    padding: const EdgeInsets.only(right: _spacing),
+                    child: _buildCell(
+                      gridStart.add(Duration(days: row * 7 + col)),
+                      today: today,
+                      createdDay: createdDay,
+                      accent: accent,
+                      theme: theme,
+                    ),
+                  ),
+              ],
             ),
           ),
-        ),
       ],
+    );
+  }
+
+  String _monthLabelForRow(int row, DateTime gridStart) {
+    for (int col = 0; col < 7; col++) {
+      final date = gridStart.add(Duration(days: row * 7 + col));
+      if (date.year == _visibleYear && date.day == 1) {
+        return _monthAbbreviations[date.month - 1];
+      }
+    }
+    return '';
+  }
+
+  Widget _buildCell(
+    DateTime date, {
+    required DateTime today,
+    required DateTime createdDay,
+    required Color accent,
+    required ThemeData theme,
+  }) {
+    // Only grid-alignment padding (the stub days before Jan 1 that fill out
+    // the first week) is truly invisible — every real day of the year gets
+    // a visible dot of some kind, so the grid always reads as a complete
+    // calendar shape instead of looking broken/incomplete.
+    final outOfYear = date.year != _visibleYear;
+    if (outOfYear) {
+      return SizedBox(width: _cell, height: _cell);
+    }
+
+    final isFuture = date.isAfter(today);
+    final isBeforeCreation = date.isBefore(createdDay);
+
+    Color color;
+    if (isFuture || isBeforeCreation) {
+      // Visible but neutral — "not tracked" rather than "good" or "missed".
+      color = theme.colorScheme.outlineVariant.withValues(alpha: 0.5);
+    } else if (_isGoodDay(date)) {
+      color = accent;
+    } else {
+      color = accent.withValues(alpha: 0.15);
+    }
+
+    return Container(
+      width: _cell,
+      height: _cell,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(_cell * 0.3),
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _NavButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final enabled = onTap != null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled
+              ? theme.colorScheme.onSurfaceVariant
+              : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+        ),
+      ),
     );
   }
 }

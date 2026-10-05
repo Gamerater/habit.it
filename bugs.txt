@@ -1,3 +1,2 @@
 visually its hard to see the habits calender to see/ it is very hard on the eyes for some colors (make it look good visually and feel wise)
-in the calender view it reads from left to right which means the completeness of tasks show in a horizontal line which is okay but a vertical line would be more intuiative and also the dots would be great to follow the actual day of the year like 365 dots for a normal year and different amont of dots for a leap year.
-unable to select previous days (imagine if someone missed to check the habit on a day, he can check it on the next day in the detailed calender view)
+in the main today_screen, the calender card view has no dots visible 
