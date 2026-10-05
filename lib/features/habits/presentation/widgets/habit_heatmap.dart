@@ -104,7 +104,9 @@ class _Cell extends StatelessWidget {
     final color = switch (state) {
       _CellState.good => accent,
       _CellState.notGood => accent.withValues(alpha: 0.1),
-      _CellState.blank => Colors.transparent,
+      // Visible neutral placeholder rather than fully transparent, so a
+      // recently-created habit's card doesn't look like a blank/broken grid.
+      _CellState.blank => Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
     };
 
     return Container(
