@@ -184,7 +184,6 @@ class _HabitCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final accent = hexToColor(habit.color);
     final today = DateOnly.today();
     final repo = ref.read(habitRepositoryProvider);
 
@@ -208,14 +207,14 @@ class _HabitCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          // Subtle color wash from the habit's own accent — this is what
-          // makes each card feel distinct at a glance rather than a stack
-          // of identical gray boxes.
-          color: Color.alphaBlend(
-            accent.withValues(alpha: 0.07),
-            theme.colorScheme.surfaceContainerHigh,
-          ),
+          // Per the theme styling rules: uncompleted cards are a plain
+          // surface with a divider-colored border; completed cards fill
+          // with the theme's secondaryContainer. The habit's own accent
+          // color is still used elsewhere (avatar, heatmap) for per-habit
+          // identity, just not for the card's own fill/border anymore.
+          color: isDone ? theme.colorScheme.secondaryContainer : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
+          border: isDone ? null : Border.all(color: theme.dividerColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,10 +256,10 @@ class _HabitCard extends ConsumerWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: isDone ? accent : theme.colorScheme.surface,
+                      color: isDone ? theme.colorScheme.primary : theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(11),
                       border: Border.all(
-                        color: isDone ? accent : theme.colorScheme.outlineVariant,
+                        color: isDone ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
                         width: 1.5,
                       ),
                     ),

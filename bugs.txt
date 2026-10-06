@@ -1,2 +1,1 @@
-visually its hard to see the habits calender to see/ it is very hard on the eyes for some colors (make it look good visually and feel wise)
-in the main today_screen, the calender card view has no dots visible 
+theme related bug: when a habit is marked done in the today_screen, it highlights it in a very not good looking color (it should select only the checkbox and the day within the calender heatmap and nothing else) 

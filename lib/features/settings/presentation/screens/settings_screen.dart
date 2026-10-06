@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'theme_settings_screen.dart';
+
 /// The only "monetization" entry point in the whole app: a link out to
 /// support the developer. No paywall, no IAPs — see PROJECT_PLAN.md.
 class SettingsScreen extends StatelessWidget {
@@ -19,9 +21,12 @@ class SettingsScreen extends StatelessWidget {
             title: Text('Daily Check-In Reminders'),
             trailing: Icon(Icons.chevron_right),
           ),
-          const ListTile(
-            title: Text('Theme'),
-            trailing: Icon(Icons.chevron_right),
+          ListTile(
+            title: const Text('Theme'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ThemeSettingsScreen()),
+            ),
           ),
           const ListTile(
             title: Text('Archived Habits'),

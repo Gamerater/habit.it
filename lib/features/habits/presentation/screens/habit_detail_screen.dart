@@ -206,7 +206,10 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                         _StatPill(
                           icon: Icons.local_fire_department,
                           label: '$currentStreak',
-                          color: accent,
+                          // Streak/milestone icons use the theme's tertiary
+                          // color per the styling rules, not the habit's own
+                          // accent — this one is theme-driven on purpose.
+                          color: Theme.of(context).colorScheme.tertiary,
                         ),
                         _StatPill(
                           icon: Icons.track_changes,

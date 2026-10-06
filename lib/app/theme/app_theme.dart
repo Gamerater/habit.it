@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'app_theme_palette.dart';
 import 'color_schemes.dart';
 
 /// Type identity: Fraunces (a characterful serif — used for the big date
@@ -10,6 +11,22 @@ import 'color_schemes.dart';
 class AppTheme {
   static ThemeData get light => _build(lightColorScheme);
   static ThemeData get dark => _build(darkColorScheme);
+
+  /// Builds the ThemeData for a given palette + brightness combination —
+  /// what the theme-switching settings actually call.
+  static ThemeData forPalette(AppThemePalette palette, Brightness brightness) {
+    return _build(_schemeFor(palette, brightness));
+  }
+
+  static ColorScheme _schemeFor(AppThemePalette palette, Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    switch (palette) {
+      case AppThemePalette.defaultTheme:
+        return isDark ? darkColorScheme : lightColorScheme;
+      case AppThemePalette.luxEmerald:
+        return isDark ? luxEmeraldDarkColorScheme : luxEmeraldLightColorScheme;
+    }
+  }
 
   static ThemeData _build(ColorScheme scheme) {
     final base = ThemeData(useMaterial3: true, colorScheme: scheme);
@@ -65,6 +82,10 @@ class AppTheme {
     return base.copyWith(
       textTheme: textTheme,
       scaffoldBackgroundColor: scheme.surface,
+      // theme.dividerColor is a distinct top-level property from
+      // dividerTheme.color below and doesn't inherit from it automatically -
+      // set explicitly since the uncompleted-habit-card border reads it.
+      dividerColor: scheme.outlineVariant,
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
