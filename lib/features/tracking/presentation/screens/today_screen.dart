@@ -207,14 +207,12 @@ class _HabitCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          // Per the theme styling rules: uncompleted cards are a plain
-          // surface with a divider-colored border; completed cards fill
-          // with the theme's secondaryContainer. The habit's own accent
-          // color is still used elsewhere (avatar, heatmap) for per-habit
-          // identity, just not for the card's own fill/border anymore.
-          color: isDone ? theme.colorScheme.secondaryContainer : theme.colorScheme.surface,
+          // Deliberately identical in both states: tinting the whole card
+          // when a habit was checked looked heavy and inconsistent across
+          // themes. Completion is shown by the check button alone.
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: isDone ? null : Border.all(color: theme.dividerColor),
+          border: Border.all(color: theme.dividerColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
