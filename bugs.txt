@@ -1,1 +1,4 @@
 theme related bug: when a habit is marked done in the today_screen, it highlights it in a very not good looking color (it should select only the checkbox and the day within the calender heatmap and nothing else) 
+
+feauture: Add an onboarding screen to help new users
+feature: add a feedback/suggestion google form in the settings as an option

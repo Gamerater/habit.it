@@ -30,6 +30,10 @@ class ThemeSettingsScreen extends ConsumerWidget {
               child: DropdownButton<AppThemePalette>(
                 value: settings.palette,
                 isExpanded: true,
+                // Each item has two lines (title + description), taller
+                // than the default fixed 48px item height DropdownButton
+                // normally enforces - null lets each item size naturally.
+                itemHeight: null,
                 items: [
                   for (final palette in AppThemePalette.values)
                     DropdownMenuItem(
@@ -70,6 +74,7 @@ class ThemeSettingsScreen extends ConsumerWidget {
               child: DropdownButton<ThemeMode>(
                 value: settings.mode,
                 isExpanded: true,
+                itemHeight: null,
                 items: const [
                   DropdownMenuItem(
                     value: ThemeMode.system,
