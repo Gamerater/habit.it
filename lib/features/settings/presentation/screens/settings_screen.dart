@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'theme_settings_screen.dart';
 
@@ -35,6 +36,13 @@ class SettingsScreen extends StatelessWidget {
           const ListTile(
             title: Text('Data Import / Export'),
             trailing: Icon(Icons.chevron_right),
+          ),
+          ListTile(
+            title: const Text('Show Onboarding'),
+            trailing: const Icon(Icons.chevron_right),
+            // extra: true marks this as a replay, so finishing just closes
+            // it instead of re-marking onboarding as completed.
+            onTap: () => context.push('/onboarding', extra: true),
           ),
           const Divider(),
           ListTile(

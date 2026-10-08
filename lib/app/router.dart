@@ -7,47 +7,65 @@ import '../features/habits/presentation/screens/add_edit_habit_screen.dart';
 import '../features/habits/presentation/screens/habit_detail_screen.dart';
 import '../features/habits/domain/habit.dart';
 import '../features/insights/presentation/screens/insights_screen.dart';
+import '../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import 'widgets/app_bottom_nav.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
+/// Builds the app's router. main() passes '/onboarding' as the starting
+/// location on first launch and '/today' afterwards. Each call gets its own
+/// root navigator key, so the default [appRouter] below can't conflict with
+/// the one main() actually runs.
+GoRouter createAppRouter({String initialLocation = '/today'}) {
+  final rootNavigatorKey = GlobalKey<NavigatorState>();
 
-final GoRouter appRouter = GoRouter(
-  navigatorKey: _rootNavigatorKey,
-  initialLocation: '/today',
-  routes: [
-    ShellRoute(
-      builder: (context, state, child) => _AppShell(location: state.uri.path, child: child),
-      routes: [
-        GoRoute(path: '/today', builder: (context, state) => const TodayScreen()),
-        GoRoute(path: '/habits', builder: (context, state) => const HabitListScreen()),
-        GoRoute(
-          path: '/insights',
-          builder: (context, state) => const InsightsScreen(),
-        ),
-        GoRoute(
-          path: '/settings',
-          builder: (context, state) => const SettingsScreen(),
-        ),
-      ],
-    ),
-    GoRoute(
-      path: '/habits/new',
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const AddEditHabitScreen(),
-    ),
-    GoRoute(
-      path: '/habits/edit',
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => AddEditHabitScreen(existingHabit: state.extra as Habit),
-    ),
-    GoRoute(
-      path: '/habits/detail',
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => HabitDetailScreen(habit: state.extra as Habit),
-    ),
-  ],
-);
+  return GoRouter(
+    navigatorKey: rootNavigatorKey,
+    initialLocation: initialLocation,
+    routes: [
+      ShellRoute(
+        builder: (context, state, child) => _AppShell(location: state.uri.path, child: child),
+        routes: [
+          GoRoute(path: '/today', builder: (context, state) => const TodayScreen()),
+          GoRoute(path: '/habits', builder: (context, state) => const HabitListScreen()),
+          GoRoute(
+            path: '/insights',
+            builder: (context, state) => const InsightsScreen(),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) => const SettingsScreen(),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/onboarding',
+        parentNavigatorKey: rootNavigatorKey,
+        // Replays from Settings pass `extra: true` so finishing just closes
+        // the screen instead of re-marking onboarding as completed.
+        builder: (context, state) => OnboardingScreen(isReplay: state.extra == true),
+      ),
+      GoRoute(
+        path: '/habits/new',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const AddEditHabitScreen(),
+      ),
+      GoRoute(
+        path: '/habits/edit',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => AddEditHabitScreen(existingHabit: state.extra as Habit),
+      ),
+      GoRoute(
+        path: '/habits/detail',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => HabitDetailScreen(habit: state.extra as Habit),
+      ),
+    ],
+  );
+}
+
+/// Default router (starts on Today) — used when HabitTrackerApp isn't given
+/// one explicitly, e.g. in widget tests.
+final GoRouter appRouter = createAppRouter();
 
 /// Bottom navigation shell: Today / Habits / Insights / Settings.
 /// This is new relative to HabitKit, which doesn't have a dedicated nav bar.
