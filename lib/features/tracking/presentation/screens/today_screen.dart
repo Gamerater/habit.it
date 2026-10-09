@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/date_utils.dart';
+import '../../../../core/utils/streak_calculator.dart';
 import '../../../categories/domain/category.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
 import '../../../habits/domain/habit.dart';
@@ -194,12 +195,25 @@ class _HabitCard extends ConsumerWidget {
         : !(entry?.isSlip ?? false);
 
     final completionsAsync = ref.watch(habitCompletionsProvider(habit.id));
-    final byDate = completionsAsync.maybeWhen(
-      data: (rows) => {
-        for (final r in rows) r.date: (value: r.value, isSlip: r.isSlip),
-      },
-      orElse: () => <String, ({int value, bool isSlip})>{},
+    final rows = completionsAsync.valueOrNull ?? const [];
+    final Map<String, ({int value, bool isSlip})> byDate = {
+      for (final r in rows) r.date: (value: r.value, isSlip: r.isSlip),
+    };
+
+    final streak = StreakCalculator.currentStreak(
+      type: habit.type,
+      targetPerDay: habit.targetPerDay,
+      habitCreatedAt: habit.createdAt,
+      entries: [
+        for (final r in rows)
+          CompletionEntry(
+            date: DateOnly.parse(r.date),
+            value: r.value,
+            isSlip: r.isSlip,
+          ),
+      ],
     );
+    final recent = _lastSevenDays(habit, byDate, today);
 
     return GestureDetector(
       onTap: () => context.push('/habits/detail', extra: habit),
@@ -271,8 +285,11 @@ class _HabitCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 14),
+            // No fixed height: the grid sizes itself from the card's width.
+            // A fixed box taller than the grid needed was what left the
+            // empty strip under the dots, and how much it left varied with
+            // phone width.
             SizedBox(
-              height: 92,
               width: double.infinity,
               child: HabitHeatmap(
                 type: habit.type,
@@ -284,9 +301,112 @@ class _HabitCard extends ConsumerWidget {
                 columns: 24,
               ),
             ),
+            const SizedBox(height: 12),
+            _CardFooter(
+              isQuit: habit.type.isQuit,
+              streak: streak,
+              good: recent.good,
+              total: recent.total,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// How many of the last 7 days (today included) count as good, ignoring
+/// days before the habit existed. Built with DateTime(y, m, d - i) rather
+/// than subtracting Durations, which can land on the wrong date across a
+/// daylight-saving change.
+({int good, int total}) _lastSevenDays(
+  Habit habit,
+  Map<String, ({int value, bool isSlip})> byDate,
+  DateTime today,
+) {
+  final createdDay = DateTime(
+    habit.createdAt.year,
+    habit.createdAt.month,
+    habit.createdAt.day,
+  );
+
+  var good = 0;
+  var total = 0;
+  for (var i = 0; i < 7; i++) {
+    final date = DateTime(today.year, today.month, today.day - i);
+    if (date.isBefore(createdDay)) continue;
+    total++;
+
+    final entry = byDate[DateOnly.format(date)];
+    final isGood = habit.type.isBuild
+        ? (entry != null && entry.value >= habit.targetPerDay)
+        : (entry == null || !entry.isSlip);
+    if (isGood) good++;
+  }
+  return (good: good, total: total);
+}
+
+/// One quiet line under the heatmap: current streak on the left (flame in the
+/// theme's tertiary color, per the streak styling rule), last-7-days tally on
+/// the right.
+class _CardFooter extends StatelessWidget {
+  final bool isQuit;
+  final int streak;
+  final int good;
+  final int total;
+
+  const _CardFooter({
+    required this.isQuit,
+    required this.streak,
+    required this.good,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final hasStreak = streak > 0;
+
+    final streakLabel = hasStreak
+        ? (isQuit
+            ? '$streak day${streak == 1 ? '' : 's'} clean'
+            : '$streak day${streak == 1 ? '' : 's'} streak')
+        : (isQuit ? 'Slipped today' : 'No streak yet');
+
+    return Row(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Icon(
+                Icons.local_fire_department,
+                size: 16,
+                color: hasStreak
+                    ? scheme.tertiary
+                    : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  streakLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: hasStreak ? scheme.onSurface : scheme.onSurfaceVariant,
+                    fontWeight: hasStreak ? FontWeight.w600 : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '$good/$total last 7 days',
+          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+      ],
     );
   }
 }

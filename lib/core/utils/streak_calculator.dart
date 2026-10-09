@@ -56,7 +56,17 @@ class StreakCalculator {
           ? (entry != null && entry.value >= targetPerDay)
           : (entry == null || !entry.isSlip);
 
-      if (!dayCounts) break;
+      if (!dayCounts) {
+        // Today is still in progress: a build habit you haven't logged YET
+        // shouldn't zero out a streak that's intact through yesterday. Skip
+        // today without counting it. (Quit habits don't get this grace — a
+        // slip logged today really does end the streak.)
+        if (type.isBuild && DateOnly.isSameDay(cursor, today)) {
+          cursor = cursor.subtract(const Duration(days: 1));
+          continue;
+        }
+        break;
+      }
 
       streak += 1;
       cursor = cursor.subtract(const Duration(days: 1));
