@@ -26,17 +26,28 @@ class HabitAvatar extends StatelessWidget {
     final isIcon = icon.startsWith('ic_');
     final iconData = isIcon ? HabitIconCatalog.iconFor(icon) : null;
 
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(size * 0.28),
+    // The Center wrapper matters: when a parent imposes tight constraints
+    // (a Row with CrossAxisAlignment.stretch, as the Habits list rows use),
+    // a bare Container's width/height are overridden and the icon square
+    // gets stretched to the row's height. Wrapped like this, the box may be
+    // stretched but the avatar itself stays exactly size x size, centered.
+    // With loose constraints (everywhere else) it wraps the avatar exactly,
+    // so nothing else changes.
+    return Center(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(size * 0.28),
+        ),
+        alignment: Alignment.center,
+        child: isIcon && iconData != null
+            ? Icon(iconData, color: color, size: size * 0.52)
+            : Text(icon, style: TextStyle(fontSize: size * 0.5)),
       ),
-      alignment: Alignment.center,
-      child: isIcon && iconData != null
-          ? Icon(iconData, color: color, size: size * 0.52)
-          : Text(icon, style: TextStyle(fontSize: size * 0.5)),
     );
   }
 }

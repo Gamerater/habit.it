@@ -10,8 +10,8 @@ import '../../../habits/domain/habit.dart';
 import '../../../habits/presentation/providers/habits_provider.dart';
 import '../../../habits/presentation/widgets/color_palette.dart';
 import '../../../habits/presentation/widgets/habit_avatar.dart';
-import '../../../habits/presentation/widgets/habit_heatmap.dart';
 import '../../../habits/presentation/widgets/habit_options_sheet.dart';
+import '../../../habits/presentation/widgets/week_heatmap.dart';
 
 /// Main tracking screen: one full-width card per habit — icon, name,
 /// description, a today check button, and a large heatmap — matching the
@@ -285,20 +285,17 @@ class _HabitCard extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 14),
-            // No fixed height: the grid sizes itself from the card's width.
-            // A fixed box taller than the grid needed was what left the
-            // empty strip under the dots, and how much it left varied with
-            // phone width.
+            // Week-aligned: 7 rows (Mon–Sun), weeks across, current week on
+            // the right. No fixed height — the grid is as tall as its cells
+            // make it, so there's no dead space under the dots.
             SizedBox(
               width: double.infinity,
-              child: HabitHeatmap(
+              child: WeekHeatmap(
                 type: habit.type,
                 targetPerDay: habit.targetPerDay,
                 colorHex: habit.color,
                 completionsByDate: byDate,
                 habitCreatedAt: habit.createdAt,
-                days: 120,
-                columns: 24,
               ),
             ),
             const SizedBox(height: 12),
