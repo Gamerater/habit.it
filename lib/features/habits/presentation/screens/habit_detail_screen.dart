@@ -8,6 +8,7 @@ import '../../../../core/utils/streak_calculator.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
 import '../../domain/habit.dart';
 import '../providers/habits_provider.dart';
+import '../widgets/amount_dialog.dart';
 import '../widgets/color_palette.dart';
 import '../widgets/habit_avatar.dart';
 import '../widgets/month_calendar.dart';
@@ -101,7 +102,17 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final habit = widget.habit;
+    // Follow the live habit rather than the snapshot this screen was opened
+    // with, so edits (goal, unit, tracking method...) show up as soon as you
+    // come back from the edit screen.
+    final liveHabits = [
+      ...(ref.watch(activeHabitsProvider).valueOrNull ?? const <Habit>[]),
+      ...(ref.watch(archivedHabitsProvider).valueOrNull ?? const <Habit>[]),
+    ];
+    final habit = liveHabits.firstWhere(
+      (h) => h.id == widget.habit.id,
+      orElse: () => widget.habit,
+    );
     final accent = hexToColor(habit.color);
     final completionsAsync = ref.watch(habitCompletionsProvider(habit.id));
     final notesAsync = ref.watch(habitNotesProvider(habit.id));
@@ -211,6 +222,12 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                           // accent — this one is theme-driven on purpose.
                           color: Theme.of(context).colorScheme.tertiary,
                         ),
+                        if (habit.tracksAmount)
+                          _StatPill(
+                            icon: Icons.flag_outlined,
+                            label: '${habit.formatAmountWithUnit(habit.targetPerDay)} / day',
+                            color: accent,
+                          ),
                         _StatPill(
                           icon: Icons.track_changes,
                           label: habit.streakGoal != null
@@ -238,9 +255,16 @@ class _HabitDetailScreenState extends ConsumerState<HabitDetailScreen> {
                   completionsByDate: byDate,
                   datesWithNotes: notesByDate.keys.toSet(),
                   habitCreatedAt: habit.createdAt,
+                  tapVerb: habit.tracksAmount ? 'set its total' : 'toggle it',
                   onDayTap: (date) {
-                    repo.toggleToday(habit: habit, date: date);
                     final dateKey = DateOnly.format(date);
+                    if (habit.tracksAmount) {
+                      // Count/Measure: a calendar tap asks for that day's
+                      // total, so a missed day can be backfilled exactly.
+                      promptForDayTotal(context, ref, habit, date, byDate[dateKey]?.value ?? 0);
+                    } else {
+                      repo.toggleToday(habit: habit, date: date);
+                    }
                     if (notesByDate.containsKey(dateKey)) {
                       setState(() => _selectedDate = date);
                       _scrollToNote(dateKey);

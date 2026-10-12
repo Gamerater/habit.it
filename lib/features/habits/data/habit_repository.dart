@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../categories/domain/category.dart';
+import '../domain/amount_format.dart';
 import '../domain/habit.dart';
 import '../domain/habit_type.dart';
 
@@ -58,10 +59,13 @@ class HabitRepository {
             icon: row.icon,
             color: row.color,
             type: row.type == 'quit' ? HabitType.quit : HabitType.build,
+            trackingMethod: TrackingMethod.fromName(row.trackingMethod),
             trackingMode: row.trackingMode == 'customValue'
                 ? TrackingMode.customValue
                 : TrackingMode.stepByStep,
             targetPerDay: row.targetPerDay,
+            tapIncrement: row.tapIncrement,
+            unit: row.unit,
             streakGoal: row.streakGoal,
             sortOrder: row.sortOrder,
             createdAt: row.createdAt,
@@ -101,8 +105,11 @@ class HabitRepository {
     required String icon,
     required String color,
     required HabitType type,
+    TrackingMethod trackingMethod = TrackingMethod.yesNo,
     TrackingMode trackingMode = TrackingMode.stepByStep,
     int targetPerDay = 1,
+    int tapIncrement = 1,
+    String? unit,
     int? streakGoal,
     List<String> categoryIds = const [],
   }) async {
@@ -116,12 +123,15 @@ class HabitRepository {
             icon: icon,
             color: color,
             type: type.isQuit ? 'quit' : 'build',
+            trackingMethod: Value(trackingMethod.name),
             trackingMode: Value(
               trackingMode == TrackingMode.customValue
                   ? 'customValue'
                   : 'stepByStep',
             ),
             targetPerDay: Value(targetPerDay),
+            tapIncrement: Value(tapIncrement),
+            unit: Value(unit),
             streakGoal: Value(streakGoal),
           ),
         );
@@ -141,6 +151,11 @@ class HabitRepository {
   /// Updates an existing habit's fields in place. Categories are replaced
   /// wholesale via [setHabitCategories] rather than diffed, since the picker
   /// always returns the full final selection.
+  ///
+  /// If a build habit's tracking method changes, its logged history is
+  /// converted to match — see [_convertHistoryForMethodChange]. Everything
+  /// happens in one transaction, so a failure can't leave the habit changed
+  /// but its history half-converted.
   Future<void> updateHabit({
     required String id,
     required String name,
@@ -148,26 +163,98 @@ class HabitRepository {
     required String icon,
     required String color,
     required HabitType type,
+    TrackingMethod trackingMethod = TrackingMethod.yesNo,
     TrackingMode trackingMode = TrackingMode.stepByStep,
     int targetPerDay = 1,
+    int tapIncrement = 1,
+    String? unit,
     int? streakGoal,
     List<String> categoryIds = const [],
   }) async {
-    await (_db.update(_db.habits)..where((h) => h.id.equals(id))).write(
-      HabitsCompanion(
-        name: Value(name),
-        description: Value(description),
-        icon: Value(icon),
-        color: Value(color),
-        type: Value(type.isQuit ? 'quit' : 'build'),
-        trackingMode: Value(
-          trackingMode == TrackingMode.customValue ? 'customValue' : 'stepByStep',
+    await _db.transaction(() async {
+      final old = await (_db.select(_db.habits)..where((h) => h.id.equals(id)))
+          .getSingleOrNull();
+
+      await (_db.update(_db.habits)..where((h) => h.id.equals(id))).write(
+        HabitsCompanion(
+          name: Value(name),
+          description: Value(description),
+          icon: Value(icon),
+          color: Value(color),
+          type: Value(type.isQuit ? 'quit' : 'build'),
+          trackingMethod: Value(trackingMethod.name),
+          trackingMode: Value(
+            trackingMode == TrackingMode.customValue ? 'customValue' : 'stepByStep',
+          ),
+          targetPerDay: Value(targetPerDay),
+          tapIncrement: Value(tapIncrement),
+          unit: Value(unit),
+          streakGoal: Value(streakGoal),
         ),
-        targetPerDay: Value(targetPerDay),
-        streakGoal: Value(streakGoal),
-      ),
-    );
-    await setHabitCategories(id, categoryIds);
+      );
+      await setHabitCategories(id, categoryIds);
+
+      // Only convert when it stays a build habit: switching build <-> quit
+      // changes what a row means entirely, which isn't a unit conversion.
+      if (old != null && old.type == 'build' && type.isBuild) {
+        await _convertHistoryForMethodChange(
+          habitId: id,
+          from: TrackingMethod.fromName(old.trackingMethod),
+          to: trackingMethod,
+          oldGoal: old.targetPerDay,
+          newGoal: targetPerDay,
+        );
+      }
+    });
+  }
+
+  /// Rewrites logged days after a tracking-method change so they still mean
+  /// what they did:
+  /// - to or from Yes/No: only fully completed days survive, and become a
+  ///   completed day under the new goal. Partial progress has no yes/no
+  ///   equivalent, so those rows are removed.
+  /// - Count -> Measure: the same numbers, now stored in thousandths.
+  /// - Measure -> Count: rounded to whole numbers; days that round to 0 are
+  ///   removed.
+  /// A change that keeps the method (just a new goal or unit) leaves history
+  /// alone — past days are simply judged against the current goal.
+  Future<void> _convertHistoryForMethodChange({
+    required String habitId,
+    required TrackingMethod from,
+    required TrackingMethod to,
+    required int oldGoal,
+    required int newGoal,
+  }) async {
+    if (from == to) return;
+
+    final rows = await (_db.select(_db.completions)
+          ..where((c) => c.habitId.equals(habitId)))
+        .get();
+
+    for (final row in rows) {
+      if (row.isSlip) continue;
+
+      int? newValue; // null means remove the row
+      if (from == TrackingMethod.yesNo || to == TrackingMethod.yesNo) {
+        newValue = row.value >= oldGoal ? newGoal : null;
+      } else if (from == TrackingMethod.count && to == TrackingMethod.measure) {
+        newValue = row.value * measureScale;
+      } else {
+        final whole = (row.value / measureScale).round();
+        newValue = whole > 0 ? whole : null;
+      }
+
+      if (newValue == null) {
+        await (_db.delete(_db.completions)..where((c) => c.id.equals(row.id))).go();
+      } else if (newValue != row.value) {
+        await (_db.update(_db.completions)..where((c) => c.id.equals(row.id))).write(
+          CompletionsCompanion(
+            value: Value(newValue),
+            updatedAt: Value(DateTime.now()),
+          ),
+        );
+      }
+    }
   }
 
   /// Persists a new manual order after a drag-to-reorder — [orderedIds] is
@@ -223,6 +310,44 @@ class HabitRepository {
         ),
       );
     }
+  }
+
+  /// Sets a day's total for a Count/Measure habit, in stored units. Zero (or
+  /// less) clears the day, so "no progress" never leaves an empty row behind.
+  Future<void> setAmount({
+    required String habitId,
+    required DateTime date,
+    required int value,
+  }) async {
+    if (value <= 0) {
+      final dateKey = DateOnly.format(date);
+      await (_db.delete(_db.completions)
+            ..where((c) => c.habitId.equals(habitId) & c.date.equals(dateKey)))
+          .go();
+      return;
+    }
+    await setCompletion(habitId: habitId, date: date, value: value);
+  }
+
+  /// Adds [delta] (stored units) to a day's total — what a tap does in "add
+  /// an amount" mode. Read-then-write inside a transaction so two quick taps
+  /// can't both read the same total and lose one of the increments.
+  Future<void> addToDay({
+    required String habitId,
+    required DateTime date,
+    required int delta,
+  }) async {
+    await _db.transaction(() async {
+      final dateKey = DateOnly.format(date);
+      final existing = await (_db.select(_db.completions)
+            ..where((c) => c.habitId.equals(habitId) & c.date.equals(dateKey)))
+          .getSingleOrNull();
+      await setAmount(
+        habitId: habitId,
+        date: date,
+        value: (existing?.value ?? 0) + delta,
+      );
+    });
   }
 
   /// Toggles today's (or any [date]'s) state with one tap, matching what the

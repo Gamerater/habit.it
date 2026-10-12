@@ -27,7 +27,7 @@ class AppDatabase extends _$AppDatabase {
   // Bump this and add a migration step whenever a table changes shape after
   // the app has real user data — onCreate alone only covers fresh installs.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -37,6 +37,13 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.createTable(notes);
+          }
+          if (from < 3) {
+            // Count/Measure tracking. Each column has a default, so every
+            // existing habit keeps behaving exactly as a yes/no habit.
+            await m.addColumn(habits, habits.trackingMethod);
+            await m.addColumn(habits, habits.tapIncrement);
+            await m.addColumn(habits, habits.unit);
           }
         },
       );

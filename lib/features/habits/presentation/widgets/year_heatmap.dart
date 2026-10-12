@@ -177,7 +177,11 @@ class _YearHeatmapState extends State<YearHeatmap> {
                                 } else if (isGoodDay(date)) {
                                   color = accent;
                                 } else {
-                                  color = accent.withValues(alpha: 0.15);
+                                  color = partialProgressColor(
+                                    accent,
+                                    value: widget.completionsByDate[DateOnly.format(date)]?.value ?? 0,
+                                    target: widget.targetPerDay,
+                                  );
                                 }
 
                                 return Container(

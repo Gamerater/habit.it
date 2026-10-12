@@ -7,7 +7,9 @@ import '../../../../core/utils/streak_calculator.dart';
 import '../../../categories/domain/category.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
 import '../../../habits/domain/habit.dart';
+import '../../../habits/domain/habit_type.dart';
 import '../../../habits/presentation/providers/habits_provider.dart';
+import '../../../habits/presentation/widgets/amount_dialog.dart';
 import '../../../habits/presentation/widgets/color_palette.dart';
 import '../../../habits/presentation/widgets/habit_avatar.dart';
 import '../../../habits/presentation/widgets/habit_options_sheet.dart';
@@ -261,7 +263,30 @@ class _HabitCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                GestureDetector(
+                habit.tracksAmount
+                    ? _AmountButton(
+                        habit: habit,
+                        value: entry?.value ?? 0,
+                        isDone: isDone,
+                        // "Add an amount" habits add their increment on tap;
+                        // "enter total" habits ask. Long-press always opens
+                        // the total dialog, which is also how you fix a
+                        // mistaken tap or clear the day.
+                        onTap: () {
+                          if (habit.trackingMode == TrackingMode.stepByStep) {
+                            repo.addToDay(
+                              habitId: habit.id,
+                              date: today,
+                              delta: habit.tapIncrement,
+                            );
+                          } else {
+                            promptForDayTotal(context, ref, habit, today, entry?.value ?? 0);
+                          }
+                        },
+                        onLongPress: () =>
+                            promptForDayTotal(context, ref, habit, today, entry?.value ?? 0),
+                      )
+                    : GestureDetector(
                   onTap: () => repo.toggleToday(habit: habit, date: today),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 120),
@@ -306,6 +331,94 @@ class _HabitCard extends ConsumerWidget {
               total: recent.total,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The Today-card button for Count/Measure habits: a pill showing progress
+/// toward the goal ("3/8", "1.5/2 L") whose background fills as you go, and
+/// turns solid with a check once the goal is met.
+class _AmountButton extends StatelessWidget {
+  final Habit habit;
+  final int value;
+  final bool isDone;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _AmountButton({
+    required this.habit,
+    required this.value,
+    required this.isDone,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    final goal = habit.targetPerDay;
+    final fraction = goal <= 0 ? 0.0 : (value / goal).clamp(0.0, 1.0).toDouble();
+    final adds = habit.trackingMode == TrackingMode.stepByStep;
+    final label = '${habit.formatAmount(value)}/${habit.formatAmountWithUnit(goal)}';
+
+    final foreground = isDone ? scheme.onPrimary : scheme.onSurface;
+    final icon = isDone ? Icons.check : (adds ? Icons.add : Icons.edit_outlined);
+
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: 36,
+          constraints: const BoxConstraints(minWidth: 36, maxWidth: 150),
+          decoration: BoxDecoration(
+            color: isDone ? scheme.primary : scheme.surface,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: isDone ? scheme.primary : scheme.outlineVariant,
+              width: 1.5,
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (!isDone && fraction > 0)
+                Positioned.fill(
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: fraction,
+                    child: ColoredBox(color: scheme.primary.withValues(alpha: 0.22)),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 14, color: foreground),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

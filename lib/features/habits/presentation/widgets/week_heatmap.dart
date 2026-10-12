@@ -22,7 +22,8 @@ const int _maxWeeks = 26;
 /// and therefore card height — about the same on narrow and wide screens.
 ///
 /// Day colors follow the other heatmaps: the habit's color for a good day, a
-/// faint tint of it for a day that wasn't, and a neutral gray for days that
+/// tint of it for a day that wasn't (darker the closer a Count/Measure habit
+/// got to its goal), and a neutral gray for days that
 /// can't be tracked (before the habit existed, or still in the future).
 class WeekHeatmap extends StatelessWidget {
   final HabitType type;
@@ -59,7 +60,9 @@ class WeekHeatmap extends StatelessWidget {
       final isGood = type.isBuild
           ? (entry != null && entry.value >= targetPerDay)
           : (entry == null || !entry.isSlip);
-      return isGood ? accent : accent.withValues(alpha: 0.1);
+      return isGood
+          ? accent
+          : partialProgressColor(accent, value: entry?.value ?? 0, target: targetPerDay);
     }
 
     return LayoutBuilder(

@@ -26,6 +26,10 @@ class MonthCalendar extends StatefulWidget {
   final Map<String, ({int value, bool isSlip})> completionsByDate;
   final Set<String> datesWithNotes;
   final DateTime habitCreatedAt;
+
+  /// What a tap does, for the hint under the calendar ("toggle it" for
+  /// yes/no habits, "set its total" for Count/Measure).
+  final String tapVerb;
   final ValueChanged<DateTime> onDayTap;
   final ValueChanged<DateTime> onDayLongPress;
 
@@ -37,6 +41,7 @@ class MonthCalendar extends StatefulWidget {
     required this.completionsByDate,
     required this.datesWithNotes,
     required this.habitCreatedAt,
+    this.tapVerb = 'toggle it',
     required this.onDayTap,
     required this.onDayLongPress,
   });
@@ -67,6 +72,16 @@ class _MonthCalendarState extends State<MonthCalendar> {
       return entry != null && entry.value >= widget.targetPerDay;
     }
     return entry == null || !entry.isSlip;
+  }
+
+  /// For Count/Measure habits: the tint strength for a day that has some
+  /// progress but hasn't reached the goal, or null when there's nothing
+  /// partial to show (no entry, a slip, or the goal already met).
+  double? _partialAlphaFor(DateTime date) {
+    final entry = widget.completionsByDate[DateOnly.format(date)];
+    if (entry == null || entry.isSlip) return null;
+    if (entry.value <= 0 || entry.value >= widget.targetPerDay) return null;
+    return partialProgressAlpha(value: entry.value, target: widget.targetPerDay);
   }
 
   bool _isBeforeCreation(DateTime date) {
@@ -113,6 +128,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
                     isToday: DateOnly.isSameDay(days[row * 7 + col], today),
                     isDisabled: _isDisabled(days[row * 7 + col], today),
                     isGood: _isGoodDay(days[row * 7 + col]),
+                    partialAlpha: _partialAlphaFor(days[row * 7 + col]),
                     hasNote: widget.datesWithNotes.contains(
                       DateOnly.format(days[row * 7 + col]),
                     ),
@@ -156,7 +172,7 @@ class _MonthCalendarState extends State<MonthCalendar> {
         const SizedBox(height: 8),
         Center(
           child: Text(
-            'Tap a day to toggle it (up to $editableWindowDays days back). Press and hold to add a note.',
+            'Tap a day to ${widget.tapVerb} (up to $editableWindowDays days back). Press and hold to add a note.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -195,6 +211,7 @@ class _DayCell extends StatelessWidget {
   final bool isToday;
   final bool isDisabled;
   final bool isGood;
+  final double? partialAlpha;
   final bool hasNote;
   final Color accent;
   final VoidCallback onTap;
@@ -206,6 +223,7 @@ class _DayCell extends StatelessWidget {
     required this.isToday,
     required this.isDisabled,
     required this.isGood,
+    required this.partialAlpha,
     required this.hasNote,
     required this.accent,
     required this.onTap,
@@ -217,9 +235,15 @@ class _DayCell extends StatelessWidget {
     final theme = Theme.of(context);
     final highlight = !isDisabled && isGood;
 
+    // A Count/Measure day with partial progress is tinted in proportion to
+    // how much of the goal was reached. Past ~55% the tint is strong enough
+    // that the number needs the same contrast treatment as a finished day.
+    final partial = (!isDisabled && !isGood) ? partialAlpha : null;
+    final strongFill = highlight || (partial != null && partial >= 0.55);
+
     final textColor = isDisabled
         ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
-        : (highlight
+        : (strongFill
             ? (ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
                 ? Colors.white
                 : Colors.black)
@@ -234,7 +258,9 @@ class _DayCell extends StatelessWidget {
           aspectRatio: 1,
           child: Container(
             decoration: BoxDecoration(
-              color: highlight ? accent.withValues(alpha: 0.85) : Colors.transparent,
+              color: highlight
+                  ? accent.withValues(alpha: 0.85)
+                  : (partial != null ? accent.withValues(alpha: partial) : Colors.transparent),
               borderRadius: BorderRadius.circular(12),
               border: isToday ? Border.all(color: accent, width: 2) : null,
             ),
@@ -249,7 +275,7 @@ class _DayCell extends StatelessWidget {
                       width: 4,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: highlight ? Colors.white : accent,
+                        color: strongFill ? Colors.white : accent,
                         shape: BoxShape.circle,
                       ),
                     ),

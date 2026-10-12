@@ -15,6 +15,27 @@ Color hexToColor(String hex) {
   return Color(int.parse('FF$cleaned', radix: 16));
 }
 
+/// Opacity for a day that has some progress but hasn't reached the goal:
+/// 0 progress is the faint resting tint, and it ramps up with the fraction
+/// of the goal reached, topping out just under the solid "goal met" color so
+/// a nearly-done day is still distinguishable from a finished one.
+///
+/// Only Count/Measure habits can have partial days; for yes/no and quit
+/// habits [value] is never between 0 and [target], so this just returns the
+/// resting tint and nothing looks different.
+double partialProgressAlpha({required int value, required int target}) {
+  const resting = 0.1;
+  if (target <= 0 || value <= 0) return resting;
+  final fraction = (value / target).clamp(0.0, 1.0).toDouble();
+  return 0.28 + 0.52 * fraction;
+}
+
+/// The color for a tracked day that did NOT meet the goal, shaded by how far
+/// along it got. See [partialProgressAlpha].
+Color partialProgressColor(Color accent, {required int value, required int target}) {
+  return accent.withValues(alpha: partialProgressAlpha(value: value, target: target));
+}
+
 /// A rounded-square swatch grid with a ring around the selected color.
 /// Used on the Add/Edit Habit screen.
 class ColorPaletteGrid extends StatelessWidget {

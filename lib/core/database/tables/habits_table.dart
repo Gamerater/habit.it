@@ -21,12 +21,25 @@ class Habits extends Table {
   /// "build" or "quit" — see [HabitType].
   TextColumn get type => text()();
 
-  /// "stepByStep" or "customValue" — see [TrackingMode].
+  /// "yesNo", "count" or "measure" — see TrackingMethod. Existing rows get
+  /// "yesNo" from the migration default, which is exactly how they behaved.
+  TextColumn get trackingMethod =>
+      text().withDefault(const Constant('yesNo'))();
+
+  /// What a tap does for Count/Measure habits: "stepByStep" (add a fixed
+  /// amount) or "customValue" (enter the day's total) — see TrackingMode.
   TextColumn get trackingMode =>
       text().withDefault(const Constant('stepByStep'))();
 
-  /// How many completions/units count as "done" for the day.
+  /// The daily goal in stored units: a plain count for Count habits,
+  /// thousandths for Measure habits (see domain/amount_format.dart).
   IntColumn get targetPerDay => integer().withDefault(const Constant(1))();
+
+  /// Amount added per tap in "stepByStep" mode, in the same stored units.
+  IntColumn get tapIncrement => integer().withDefault(const Constant(1))();
+
+  /// Unit label for Count/Measure habits, e.g. "L", "km", "glasses".
+  TextColumn get unit => text().nullable()();
 
   /// Optional streak goal shown as a milestone (e.g. 30 days).
   IntColumn get streakGoal => integer().nullable()();

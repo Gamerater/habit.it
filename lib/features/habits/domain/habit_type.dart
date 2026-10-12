@@ -11,12 +11,68 @@ enum HabitType {
   bool get isQuit => this == HabitType.quit;
 }
 
-/// How a habit's daily completion is tracked.
+/// What a build habit's daily progress is measured in.
+///
+/// Quit habits are always [yesNo] — they're tracked by marking slips.
+enum TrackingMethod {
+  /// Done or not done.
+  yesNo,
+
+  /// A whole-number count toward a daily goal (e.g. 8 glasses).
+  count,
+
+  /// An amount with a unit toward a daily goal (e.g. 2.5 L, 5 km).
+  measure;
+
+  /// Parses the value stored in the database, falling back to [yesNo] for
+  /// anything unrecognized (including rows from before this column existed).
+  static TrackingMethod fromName(String? name) {
+    return TrackingMethod.values.firstWhere(
+      (m) => m.name == name,
+      orElse: () => TrackingMethod.yesNo,
+    );
+  }
+
+  String get label {
+    switch (this) {
+      case TrackingMethod.yesNo:
+        return 'Yes / No';
+      case TrackingMethod.count:
+        return 'Count';
+      case TrackingMethod.measure:
+        return 'Measure';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case TrackingMethod.yesNo:
+        return 'Mark each day done or not done.';
+      case TrackingMethod.count:
+        return 'Count toward a daily goal, like 8 glasses of water.';
+      case TrackingMethod.measure:
+        return 'Log amounts with a unit, like 2 L of water or 5 km.';
+    }
+  }
+}
+
+/// What happens when you tap a Count or Measure habit's button.
+///
+/// (Persisted in the existing `trackingMode` column, whose original
+/// "stepByStep" / "customValue" names are kept so older data still reads.)
 enum TrackingMode {
-  /// Each tap increments by 1 until [Habit.targetPerDay] is reached.
+  /// Each tap adds a fixed amount (the habit's tap increment).
   stepByStep,
 
-  /// The user enters an arbitrary numeric value for the day
-  /// (e.g. "8 glasses of water").
+  /// Each tap opens a dialog to enter the day's total.
   customValue;
+
+  String get label {
+    switch (this) {
+      case TrackingMode.stepByStep:
+        return 'Add an amount';
+      case TrackingMode.customValue:
+        return 'Enter total';
+    }
+  }
 }
