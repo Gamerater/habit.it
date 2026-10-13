@@ -21,7 +21,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _pageCount = 5;
+  static const _pageCount = 6;
 
   final _controller = PageController();
   int _page = 0;
@@ -93,10 +93,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     extra: const _BuildVsQuitCards(),
                   ),
                   _OnboardingPage(
+                    illustration: const _HeroBadge(icon: Icons.tune_rounded),
+                    title: 'Track it your way',
+                    body: 'A habit you\'re building can be a simple check, a count toward a '
+                        'daily goal, or a measured amount.',
+                    extra: const _TrackingMethodCards(),
+                  ),
+                  _OnboardingPage(
                     illustration: const _SampleHeatmap(),
                     title: 'See your consistency',
                     body: 'Each habit gets a heatmap of its history, a streak counter, and a '
-                        'full-year view. Tap any habit to dive in.',
+                        'full-year view. On Count and Measure habits, days shade darker the '
+                        'closer you get to your goal.',
                   ),
                   _OnboardingPage(
                     illustration: const _HeroBadge(icon: Icons.bolt_rounded),
@@ -318,17 +326,107 @@ class _TypeCard extends StatelessWidget {
   }
 }
 
-/// A small static heatmap that gets denser toward the right, so the page
-/// shows what "growing consistency" looks like using the app's own style.
+/// The three ways to track a build habit, one card each.
+class _TrackingMethodCards extends StatelessWidget {
+  const _TrackingMethodCards();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        _MethodCard(
+          icon: Icons.check_circle_outline,
+          title: 'Yes / No',
+          text: 'Did you do it today? One tap marks the day done.',
+        ),
+        SizedBox(height: 12),
+        _MethodCard(
+          icon: Icons.add_circle_outline,
+          title: 'Count',
+          text: 'Count toward a daily goal — like 8 glasses of water.',
+        ),
+        SizedBox(height: 12),
+        _MethodCard(
+          icon: Icons.straighten_rounded,
+          title: 'Measure',
+          text: 'Log amounts with a unit — like 2 L of water or 5 km.',
+        ),
+      ],
+    );
+  }
+}
+
+class _MethodCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+
+  const _MethodCard({required this.icon, required this.title, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: theme.colorScheme.primary, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  text,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small static heatmap that fills in and darkens toward the right, so the
+/// page shows what "growing consistency" looks like — including the partial
+/// shades Count and Measure habits get — using the app's own style.
 class _SampleHeatmap extends StatelessWidget {
   const _SampleHeatmap();
 
   static const _rows = 5;
   static const _cols = 14;
 
-  bool _filled(int row, int col) {
-    // Deterministic pseudo-pattern, with the fill threshold rising by column.
-    return ((row * 7 + col * 13) % 10) < (2 + col ~/ 2);
+  /// 0 = nothing logged, 1 = partial progress, 2 = goal met. A deterministic
+  /// pseudo-pattern whose threshold rises by column, so the grid fills in and
+  /// darkens toward the right.
+  int _level(int row, int col) {
+    final value = (row * 7 + col * 13) % 10;
+    final threshold = 2 + col ~/ 2;
+    if (value >= threshold) return 0;
+    return value < threshold - 3 ? 2 : 1;
   }
 
   @override
@@ -356,9 +454,11 @@ class _SampleHeatmap extends StatelessWidget {
                     height: 12,
                     margin: const EdgeInsets.all(1.5),
                     decoration: BoxDecoration(
-                      color: _filled(r, c)
-                          ? scheme.primary
-                          : scheme.primary.withValues(alpha: 0.12),
+                      color: switch (_level(r, c)) {
+                        2 => scheme.primary,
+                        1 => scheme.primary.withValues(alpha: 0.45),
+                        _ => scheme.primary.withValues(alpha: 0.12),
+                      },
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -379,7 +479,8 @@ class _TipsList extends StatelessWidget {
       children: const [
         _TipRow(
           icon: Icons.touch_app_outlined,
-          text: 'Tap the check on a habit card to log today.',
+          text: 'Tap a habit\'s button to log today. On Count and Measure habits it adds '
+              'to today\'s total — press and hold it to type an exact amount.',
         ),
         _TipRow(
           icon: Icons.edit_calendar_outlined,
@@ -389,6 +490,11 @@ class _TipsList extends StatelessWidget {
         _TipRow(
           icon: Icons.sticky_note_2_outlined,
           text: 'Press and hold a calendar day to add a note.',
+        ),
+        _TipRow(
+          icon: Icons.label_outline,
+          text: 'Give habits categories, then filter by them with the chips at the top '
+              'of the Today screen.',
         ),
         _TipRow(
           icon: Icons.swap_vert_rounded,
