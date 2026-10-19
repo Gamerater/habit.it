@@ -1,2 +1,16 @@
 new theme: monochrome
-update the onboaring screen
+new feature: in the today screen where there are cards for habits, add a button at the top which allows the user to change the cards size (Small, Medium, Large) as per the user's liking, you are to decide how should the cards look per view, logically the larger the card the more information it shoud show, but do keep the heatmap style maybe make the heatmap just a week long for the small or as per your wish which sould be good look wise and also not clutter anything. Everything should be clean and well organised. Make changes as per your liking and whatever is best for the user experience.
+UX is the priority
+
+new feature: Add remainder framework for reminders of doing the habit add good configurability (remainder per habit) 
+
+new file: 
+Create a single text or Markdown file named APP_ARCHITECTURE.md that acts as the "system instructions" for your app. Paste in:
+
+Folder Structure: A quick ASCII text tree of your lib/ directory structure.
+
+State Management Pattern: How state flows through the app (e.g., "We use Bloc with clean architecture. Data layer -> Repository -> Bloc -> UI").
+
+Theme & Styling Rules: Color constants, custom theme references, or font rules.
+
+Coding Conventions: E.g., "Always use strong typing, prefer const constructors, handle null safety strictly, and keep widgets small and modular."

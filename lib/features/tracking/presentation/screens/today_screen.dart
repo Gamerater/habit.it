@@ -11,14 +11,18 @@ import '../../../habits/domain/habit_type.dart';
 import '../../../habits/presentation/providers/habits_provider.dart';
 import '../../../habits/presentation/widgets/amount_dialog.dart';
 import '../../../habits/presentation/widgets/color_palette.dart';
+import '../../../habits/presentation/widgets/day_strip.dart';
 import '../../../habits/presentation/widgets/habit_avatar.dart';
 import '../../../habits/presentation/widgets/habit_options_sheet.dart';
 import '../../../habits/presentation/widgets/week_heatmap.dart';
+import '../providers/card_size_provider.dart';
 
-/// Main tracking screen: one full-width card per habit — icon, name,
-/// description, a today check button, and a large heatmap — matching the
-/// HabitKit reference layout directly per request, rather than the
-/// multi-day row-table this screen used previously.
+/// Main tracking screen: one card per habit with a button to log today.
+/// How much each card shows is the user's choice (Small / Medium / Large,
+/// from the menu in the top bar, remembered between launches):
+/// - Small: a compact row — name, streak, and a one-week strip.
+/// - Medium: description, a heatmap of recent weeks, streak footer.
+/// - Large: bigger heatmap with month labels, category tags, a stats row.
 ///
 /// Stateful now to hold the category filter selection — tap a chip to show
 /// only habits in that category (multiple chips = any-of match), tap again
@@ -38,11 +42,16 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final habitsAsync = ref.watch(activeHabitsProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final categories = categoriesAsync.valueOrNull ?? const <Category>[];
+    final cardSize = ref.watch(cardSizeProvider);
 
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
         actions: [
+          _CardSizeMenu(
+            current: cardSize,
+            onSelected: (size) => ref.read(cardSizeProvider.notifier).setSize(size),
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () => context.push('/habits/new'),
@@ -82,8 +91,11 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                     : ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                         itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
-                        itemBuilder: (context, i) => _HabitCard(habit: filtered[i]),
+                        separatorBuilder: (_, __) => SizedBox(height: cardSize.listGap),
+                        itemBuilder: (context, i) => _HabitCard(
+                          habit: filtered[i],
+                          size: cardSize,
+                        ),
                       ),
               ),
             ],
@@ -179,16 +191,120 @@ class _NoMatchesState extends StatelessWidget {
   }
 }
 
+/// Measurements that change with the card size. Smaller cards are tighter
+/// all round — padding, corner radius, and the gap between cards — so the
+/// small size reads as a dense list rather than a shrunken big card.
+extension on HabitCardSize {
+  double get cardPadding => switch (this) {
+        HabitCardSize.small => 12.0,
+        HabitCardSize.medium => 16.0,
+        HabitCardSize.large => 18.0,
+      };
+
+  double get cardRadius => switch (this) {
+        HabitCardSize.small => 16.0,
+        HabitCardSize.medium => 20.0,
+        HabitCardSize.large => 22.0,
+      };
+
+  double get listGap => switch (this) {
+        HabitCardSize.small => 8.0,
+        HabitCardSize.medium => 14.0,
+        HabitCardSize.large => 16.0,
+      };
+}
+
+/// The top-bar menu for picking the card size. The current size is
+/// highlighted, and each option says what it shows so the choice is clear
+/// without trying them all.
+class _CardSizeMenu extends StatelessWidget {
+  final HabitCardSize current;
+  final ValueChanged<HabitCardSize> onSelected;
+
+  const _CardSizeMenu({required this.current, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return PopupMenuButton<HabitCardSize>(
+      icon: const Icon(Icons.view_agenda_outlined),
+      tooltip: 'Card size',
+      initialValue: current,
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final size in HabitCardSize.values)
+          PopupMenuItem<HabitCardSize>(
+            value: size,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  size.icon,
+                  size: 22,
+                  color: size == current ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 14),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      size.label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: size == current ? FontWeight.w700 : FontWeight.w500,
+                        color: size == current ? scheme.primary : null,
+                      ),
+                    ),
+                    Text(
+                      size.description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Everything a card body needs, computed once per card so the three size
+/// layouts only differ in how they arrange it.
+class _CardData {
+  final Habit habit;
+  final Map<String, ({int value, bool isSlip})> byDate;
+  final int streak;
+  final int recentGood;
+  final int recentTotal;
+  final int totalDone;
+  final Widget trackButton;
+
+  const _CardData({
+    required this.habit,
+    required this.byDate,
+    required this.streak,
+    required this.recentGood,
+    required this.recentTotal,
+    required this.totalDone,
+    required this.trackButton,
+  });
+}
+
 class _HabitCard extends ConsumerWidget {
   final Habit habit;
+  final HabitCardSize size;
 
-  const _HabitCard({required this.habit});
+  const _HabitCard({required this.habit, required this.size});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final today = DateOnly.today();
-    final repo = ref.read(habitRepositoryProvider);
 
     final todayCompletions = ref.watch(todayCompletionsProvider).valueOrNull ?? const {};
     final entry = todayCompletions[habit.id];
@@ -217,120 +333,461 @@ class _HabitCard extends ConsumerWidget {
     );
     final recent = _lastSevenDays(habit, byDate, today);
 
+    // Lifetime total for the large card's stats row. Build habits: days that
+    // met the goal. Quit habits: every day since creation that wasn't a slip
+    // (days default to clean). UTC dates keep the day count exact across a
+    // daylight-saving change.
+    int totalDone;
+    if (habit.type.isBuild) {
+      totalDone = rows.where((r) => !r.isSlip && r.value >= habit.targetPerDay).length;
+    } else {
+      final span = DateTime.utc(today.year, today.month, today.day)
+              .difference(DateTime.utc(
+                habit.createdAt.year,
+                habit.createdAt.month,
+                habit.createdAt.day,
+              ))
+              .inDays +
+          1;
+      final clean = span - rows.where((r) => r.isSlip).length;
+      totalDone = clean < 0 ? 0 : clean;
+    }
+
+    final data = _CardData(
+      habit: habit,
+      byDate: byDate,
+      streak: streak,
+      recentGood: recent.good,
+      recentTotal: recent.total,
+      totalDone: totalDone,
+      trackButton: _TrackButton(
+        habit: habit,
+        value: entry?.value ?? 0,
+        isDone: isDone,
+        compact: size == HabitCardSize.small,
+      ),
+    );
+
+    final Widget body = switch (size) {
+      HabitCardSize.small => _SmallCardBody(data: data),
+      HabitCardSize.medium => _MediumCardBody(data: data),
+      HabitCardSize.large => _LargeCardBody(data: data),
+    };
+
     return GestureDetector(
       onTap: () => context.push('/habits/detail', extra: habit),
       onLongPress: () => showHabitOptionsSheet(context, ref, habit),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(size.cardPadding),
         decoration: BoxDecoration(
           // Deliberately identical in both states: tinting the whole card
           // when a habit was checked looked heavy and inconsistent across
-          // themes. Completion is shown by the check button alone.
+          // themes. Completion is shown by the track button alone.
           color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(size.cardRadius),
           border: Border.all(color: theme.dividerColor),
         ),
-        child: Column(
+        child: body,
+      ),
+    );
+  }
+}
+
+/// The button on the right of every card. A check for yes/no habits; a
+/// progress pill for Count/Measure habits (see [_AmountButton]).
+class _TrackButton extends ConsumerWidget {
+  final Habit habit;
+  final int value;
+  final bool isDone;
+
+  /// Used by the small card, where horizontal space is tight.
+  final bool compact;
+
+  const _TrackButton({
+    required this.habit,
+    required this.value,
+    required this.isDone,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final repo = ref.read(habitRepositoryProvider);
+    final today = DateOnly.today();
+
+    if (habit.tracksAmount) {
+      return _AmountButton(
+        habit: habit,
+        value: value,
+        isDone: isDone,
+        compact: compact,
+        // "Add an amount" habits add their increment on tap; "enter total"
+        // habits ask. Long-press always opens the total dialog, which is
+        // also how you fix a mistaken tap or clear the day.
+        onTap: () {
+          if (habit.trackingMode == TrackingMode.stepByStep) {
+            repo.addToDay(habitId: habit.id, date: today, delta: habit.tapIncrement);
+          } else {
+            promptForDayTotal(context, ref, habit, today, value);
+          }
+        },
+        onLongPress: () => promptForDayTotal(context, ref, habit, today, value),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => repo.toggleToday(habit: habit, date: today),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isDone ? theme.colorScheme.primary : theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: isDone ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+            width: 1.5,
+          ),
+        ),
+        child: Icon(
+          Icons.check,
+          size: 18,
+          color: isDone ? Colors.white : theme.colorScheme.outlineVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// Small: one dense row. Name on top; underneath, a one-week strip and the
+/// streak count. No description, no footer — the point is to fit many habits
+/// on screen and still see at a glance how this week is going.
+class _SmallCardBody extends StatelessWidget {
+  final _CardData data;
+
+  const _SmallCardBody({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final habit = data.habit;
+
+    return Row(
+      children: [
+        HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 36),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                habit.name,
+                style: theme.textTheme.titleMedium?.copyWith(fontSize: 15),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  DayStrip(
+                    type: habit.type,
+                    targetPerDay: habit.targetPerDay,
+                    colorHex: habit.color,
+                    completionsByDate: data.byDate,
+                    habitCreatedAt: habit.createdAt,
+                  ),
+                  if (data.streak > 0) ...[
+                    const SizedBox(width: 10),
+                    Flexible(child: _MiniStreak(streak: data.streak)),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        data.trackButton,
+      ],
+    );
+  }
+}
+
+/// A flame and a number, scaled down rather than overflowing if the row is
+/// too tight (a wide Count/Measure pill on a narrow phone).
+class _MiniStreak extends StatelessWidget {
+  final int streak;
+
+  const _MiniStreak({required this.streak});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.local_fire_department, size: 14, color: theme.colorScheme.tertiary),
+          const SizedBox(width: 3),
+          Text(
+            '$streak',
+            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Medium: the standard card — description, a heatmap of recent weeks, and a
+/// one-line streak / last-7-days footer.
+class _MediumCardBody extends StatelessWidget {
+  final _CardData data;
+
+  const _MediumCardBody({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final habit = data.habit;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 44),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        habit.name,
-                        style: theme.textTheme.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (habit.description?.isNotEmpty == true) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          habit.description!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+            HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 44),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    habit.name,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(width: 8),
-                habit.tracksAmount
-                    ? _AmountButton(
-                        habit: habit,
-                        value: entry?.value ?? 0,
-                        isDone: isDone,
-                        // "Add an amount" habits add their increment on tap;
-                        // "enter total" habits ask. Long-press always opens
-                        // the total dialog, which is also how you fix a
-                        // mistaken tap or clear the day.
-                        onTap: () {
-                          if (habit.trackingMode == TrackingMode.stepByStep) {
-                            repo.addToDay(
-                              habitId: habit.id,
-                              date: today,
-                              delta: habit.tapIncrement,
-                            );
-                          } else {
-                            promptForDayTotal(context, ref, habit, today, entry?.value ?? 0);
-                          }
-                        },
-                        onLongPress: () =>
-                            promptForDayTotal(context, ref, habit, today, entry?.value ?? 0),
-                      )
-                    : GestureDetector(
-                  onTap: () => repo.toggleToday(habit: habit, date: today),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: isDone ? theme.colorScheme.primary : theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(
-                        color: isDone ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
-                        width: 1.5,
+                  if (habit.description?.isNotEmpty == true) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      habit.description!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    child: Icon(
-                      Icons.check,
-                      size: 18,
-                      color: isDone ? Colors.white : theme.colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            // Week-aligned: 7 rows (Mon–Sun), weeks across, current week on
-            // the right. No fixed height — the grid is as tall as its cells
-            // make it, so there's no dead space under the dots.
-            SizedBox(
-              width: double.infinity,
-              child: WeekHeatmap(
-                type: habit.type,
-                targetPerDay: habit.targetPerDay,
-                colorHex: habit.color,
-                completionsByDate: byDate,
-                habitCreatedAt: habit.createdAt,
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            _CardFooter(
-              isQuit: habit.type.isQuit,
-              streak: streak,
-              good: recent.good,
-              total: recent.total,
+            const SizedBox(width: 8),
+            data.trackButton,
+          ],
+        ),
+        const SizedBox(height: 14),
+        // Week-aligned: 7 rows (Mon–Sun), weeks across, current week on the
+        // right. No fixed height, so there's no dead space under the dots.
+        SizedBox(
+          width: double.infinity,
+          child: WeekHeatmap(
+            type: habit.type,
+            targetPerDay: habit.targetPerDay,
+            colorHex: habit.color,
+            completionsByDate: data.byDate,
+            habitCreatedAt: habit.createdAt,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _CardFooter(
+          isQuit: habit.type.isQuit,
+          streak: data.streak,
+          good: data.recentGood,
+          total: data.recentTotal,
+        ),
+      ],
+    );
+  }
+}
+
+/// Large: everything. A bigger avatar and a two-line description, the
+/// habit's category tags, a larger heatmap with month labels, and a stats row
+/// (streak, last 7 days, lifetime total) in place of the one-line footer.
+class _LargeCardBody extends ConsumerWidget {
+  final _CardData data;
+
+  const _LargeCardBody({required this.data});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final habit = data.habit;
+
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const <Category>[];
+    final tags = categories.where((c) => habit.categoryIds.contains(c.id)).toList();
+
+    final statStyle = theme.textTheme.titleMedium?.copyWith(
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            HabitAvatar(icon: habit.icon, colorHex: habit.color, size: 52),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    habit.name,
+                    style: theme.textTheme.titleLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (habit.description?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      habit.description!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            data.trackButton,
+          ],
+        ),
+        if (tags.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [for (final category in tags) _CategoryTag(category: category)],
+          ),
+        ],
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: WeekHeatmap(
+            type: habit.type,
+            targetPerDay: habit.targetPerDay,
+            colorHex: habit.color,
+            completionsByDate: data.byDate,
+            habitCreatedAt: habit.createdAt,
+            targetCell: 18,
+            showMonthLabels: true,
+          ),
+        ),
+        const SizedBox(height: 14),
+        const Divider(height: 1),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _StatBlock(
+                label: 'Current streak',
+                value: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.local_fire_department,
+                      size: 18,
+                      color: data.streak > 0
+                          ? scheme.tertiary
+                          : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('${data.streak}', style: statStyle),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: _StatBlock(
+                label: 'Last 7 days',
+                value: Text('${data.recentGood}/${data.recentTotal}', style: statStyle),
+              ),
+            ),
+            Expanded(
+              child: _StatBlock(
+                label: habit.type.isQuit ? 'Clean days' : 'Days done',
+                value: Text('${data.totalDone}', style: statStyle),
+              ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StatBlock extends StatelessWidget {
+  final Widget value;
+  final String label;
+
+  const _StatBlock({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        value,
+        const SizedBox(height: 2),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryTag extends StatelessWidget {
+  final Category category;
+
+  const _CategoryTag({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = hexToColor(category.color);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        category.name,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -347,12 +804,17 @@ class _AmountButton extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
+  /// Narrower pill whose label shrinks to fit instead of truncating — for
+  /// the small card, where the pill shares a row with the week strip.
+  final bool compact;
+
   const _AmountButton({
     required this.habit,
     required this.value,
     required this.isDone,
     required this.onTap,
     required this.onLongPress,
+    this.compact = false,
   });
 
   @override
@@ -368,6 +830,16 @@ class _AmountButton extends StatelessWidget {
     final foreground = isDone ? scheme.onPrimary : scheme.onSurface;
     final icon = isDone ? Icons.check : (adds ? Icons.add : Icons.edit_outlined);
 
+    final labelText = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.labelLarge?.copyWith(
+        color: foreground,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -376,7 +848,7 @@ class _AmountButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           height: 36,
-          constraints: const BoxConstraints(minWidth: 36, maxWidth: 150),
+          constraints: BoxConstraints(minWidth: 36, maxWidth: compact ? 110 : 150),
           decoration: BoxDecoration(
             color: isDone ? scheme.primary : scheme.surface,
             borderRadius: BorderRadius.circular(11),
@@ -404,15 +876,9 @@ class _AmountButton extends StatelessWidget {
                     Icon(icon, size: 14, color: foreground),
                     const SizedBox(width: 4),
                     Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: foreground,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: compact
+                          ? FittedBox(fit: BoxFit.scaleDown, child: labelText)
+                          : labelText,
                     ),
                   ],
                 ),
